@@ -54,6 +54,8 @@ add_library(
     ${SOURCES}
 )
 
+add_library(vsgCs::${LIB_NAME} ALIAS ${LIB_NAME})
+
 set_target_properties(${LIB_NAME} PROPERTIES
   PUBLIC_HEADER "${LIB_PUBLIC_HEADERS}"
 )
