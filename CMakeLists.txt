@@ -33,45 +33,38 @@ if (VULKAN_SDK)
     set(ENV{VULKAN_SDK} ${VULKAN_SDK})
 endif()
 
+message("Fetching and make-available vsg ...")
+
 set(VSG_MIN_VERSION 1.0.6)
+add_subdirectory(third_party/vsg)
 
-FetchContent_Declare(vsg
-  GIT_REPOSITORY https://github.com/vsg-dev/VulkanSceneGraph.git
-  GIT_TAG v1.0.6
-  GIT_PROGRESS TRUE
-  FIND_PACKAGE_ARGS ${VSG_MIN_VERSION}
-)
-
-FetchContent_MakeAvailable(vsg)
 # find_package(vsg) includes vsgMacros
 if (vsg_SOURCE_DIR)
+  message("Fetching and make-available vsgMacros ...")
   SET(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${vsg_SOURCE_DIR}/cmake")
   include("vsgMacros")
 endif()
 
-#find_package(vsgXchange)
+message("Fetching and make-available vsg finished")
+
+find_package(vsgXchange)
+
+message("Fetching and make-available vsgImGui ...")
 
 set(VSGIMGUI_MIN_VERSION 0.1.0)
+add_subdirectory(third_party/vsgImGui)
 
-FetchContent_Declare(vsgImGui
-  GIT_REPOSITORY https://github.com/vsg-dev/vsgImGui.git
-  GIT_TAG v0.1.0
-  GIT_PROGRESS TRUE
-  FIND_PACKAGE_ARGS ${VSGIMGUI_MIN_VERSION}
-)
+message("Fetching and make-available vsgImGui finished")
 
-FetchContent_MakeAvailable(vsgImGui)
+message("Fetching and make-available cesium-native ...")
 
-# Wrangle Cesium's dependencies into shape i.e., install them!
+# option(CESIUM_SPDLOG_HEADER_ONLY "Whether to use the header-only version of spdlog." OFF)
 option(GSL_INSTALL "Generate and install GSL target" ON)
-FetchContent_Declare(Cesium
-  GIT_REPOSITORY https://github.com/timoore/cesium-native.git
-  GIT_TAG 1c940056443858c8fae9b3b6743b68ccc92985a7  # cmake-fixes
-  GIT_PROGRESS TRUE
-)
+add_subdirectory(third_party/cesium-native)
 
-message("Fetching cesium-native. This could take a while...")
-FetchContent_MakeAvailable(Cesium)
+message("Fetching and make-available cesium-native finished")
+
+# find_package(PROJ REQUIRED)
 
 if (RUN_CLANG_TIDY)
   find_program(CLANG_TIDY_EXE NAMES "clang-tidy")

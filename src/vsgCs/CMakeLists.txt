@@ -88,5 +88,5 @@ install(TARGETS ${LIB_NAME} EXPORT vsgCsTargets
   )
 
 if(WIN32)
-  install(IMPORTED_RUNTIME_ARTIFACTS CURL::libcurl)
+  # install(IMPORTED_RUNTIME_ARTIFACTS CURL::libcurl)
 endif()
