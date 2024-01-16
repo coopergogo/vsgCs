@@ -97,7 +97,7 @@ install(TARGETS ${LIB_NAME} EXPORT vsgCsTargets
   )
 
 if(WIN32)
-  install(IMPORTED_RUNTIME_ARTIFACTS CURL::libcurl_shared)
+  # install(IMPORTED_RUNTIME_ARTIFACTS CURL::libcurl_shared)
 endif()
 
 include(GenerateExportHeader)
