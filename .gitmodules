@@ -1,3 +1,13 @@
 [submodule "3rdparty/tracy"]
 	path = 3rdparty/tracy
 	url = git@github.com:wolfpld/tracy.git
+[submodule "third_party/vsg"]
+	path = third_party/vsg
+	url = https://github.com/vsg-dev/VulkanSceneGraph.git
+[submodule "third_party/cesium-native"]
+	path = third_party/cesium-native
+	url = https://github.com/timoore/cesium-native.git
+
+[submodule "third_party/vsgImGui"]
+	path = third_party/vsgImGui
+	url = https://github.com/vsg-dev/vsgImGui.git
