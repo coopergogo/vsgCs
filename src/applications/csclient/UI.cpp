@@ -42,8 +42,10 @@ bool UI::createUI(const vsg::ref_ptr<vsg::Window>& window,
     createImGui(window);
     // Add the ImGui event handler first to handle events early
     viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
-    _trackball = vsg::Trackball::create(camera, ellipsoidModel);
     viewer->addEventHandler(vsg::CloseHandler::create(viewer));
+
+    _trackball = vsg::Trackball::create(camera, ellipsoidModel);
+
     {
         _trackball->addKeyViewpoint(static_cast<vsg::KeySymbol>('1'), 51.50151088842245, -0.14181489107549874, 2000.0, 2.0); // Grenwish Observatory
         _trackball->addKeyViewpoint(static_cast<vsg::KeySymbol>('2'), 55.948642740309324, -3.199226855522667, 2000.0, 2.0);  // Edinburgh Castle
@@ -59,10 +61,35 @@ bool UI::createUI(const vsg::ref_ptr<vsg::Window>& window,
         _trackball->rotateButtonMask = vsg::BUTTON_MASK_2;
         _trackball->zoomButtonMask = vsg::BUTTON_MASK_3;
     }
+
     viewer->addEventHandler(_trackball);
 
     return true;
 }
+
+bool UI::createUI2(const vsg::ref_ptr<vsg::Window>& window,
+                  const vsg::ref_ptr<vsg::Viewer>& viewer,
+                  const vsg::ref_ptr<vsg::Camera>& camera,
+                  const vsg::ref_ptr<vsg::Options>&)
+{
+    createImGui(window);
+    // Add the ImGui event handler first to handle events early
+    viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
+    viewer->addEventHandler(vsg::CloseHandler::create(viewer));
+
+    _trackball = vsg::Trackball::create(camera);
+    {
+        // osgEarthStyleMouseButtons
+        _trackball->panButtonMask = vsg::BUTTON_MASK_1;
+        _trackball->rotateButtonMask = vsg::BUTTON_MASK_2;
+        _trackball->zoomButtonMask = vsg::BUTTON_MASK_3;
+    }
+    viewer->addEventHandler(_trackball);
+
+    return true;
+}
+
+
 
 vsg::ref_ptr<vsgImGui::RenderImGui> UI::createImGui(const vsg::ref_ptr<vsg::Window>& window)
 {

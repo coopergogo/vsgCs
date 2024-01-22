@@ -33,6 +33,7 @@ SOFTWARE.
 #include <Cesium3DTilesSelection/Tile.h>
 #include <CesiumAsync/IAssetResponse.h>
 #include <CesiumGltfReader/GltfReader.h>
+#include <iostream>
 
 namespace vsgCs
 {
@@ -52,6 +53,7 @@ namespace vsgCs
     {
         auto boundingVolume = tile->getBoundingVolume();
         const auto* boundingRegion = getBoundingRegionFromBoundingVolume(boundingVolume);
+        std::cout << "boundingRegion:" << boundingRegion << std::endl;
         if (boundingRegion)
         {
             auto cartoCenter = boundingRegion->getRectangle().computeCenter();
@@ -71,6 +73,9 @@ namespace vsgCs
             auto side = vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), direction);
             side = vsg::normalize(side);
             vsg::dvec3 up = vsg::cross(direction, side);
+
+            std::cout << "eye:" << eye << ", vPosition:" << vPosition << ", up:" << up << std::endl;
+
             return vsg::LookAt::create(eye, vPosition, up);
         }
         return vsg::LookAt::create();

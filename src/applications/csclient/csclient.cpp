@@ -196,16 +196,21 @@ int main(int argc, char** argv)
 
         // compute the bounds of the scene graph to help position camera
         // XXX not yet
+
 #if 0
         vsg::ComputeBounds computeBounds;
         vsg_scene->accept(computeBounds);
         vsg::dvec3 centre = (computeBounds.bounds.min + computeBounds.bounds.max) * 0.5;
         double radius = vsg::length(computeBounds.bounds.max - computeBounds.bounds.min) * 0.6;
 #endif
+
+#if 0
         vsg::dvec3 centre(0.0, 0.0, 0.0);
         double radius = ellipsoidModel->radiusEquator();
 
-        double nearFarRatio = 0.0005;
+        std::cout << "radius:" << radius << std::endl;
+
+        double nearFarRatio = 0.000001;
 
         // set up the camera
         vsg::ref_ptr<vsg::LookAt> lookAt;
@@ -213,6 +218,8 @@ int main(int argc, char** argv)
         bool setViewpointAfterLoad = false;
         if (poi_latitude != invalid_value && poi_longitude != invalid_value)
         {
+            std::cout << "poi_latitude:" << poi_latitude << ", poi_longitude:" << poi_longitude << std::endl;
+
             double height = (poi_distance != invalid_value) ? poi_distance : radius * 3.5;
             auto ecef = ellipsoidModel->convertLatLongAltitudeToECEF({poi_latitude, poi_longitude, 0.0});
             auto ecef_normal = vsg::normalize(ecef);
@@ -221,26 +228,48 @@ int main(int argc, char** argv)
             vsg::dvec3 eye = centre + ecef_normal * height;
             vsg::dvec3 up = vsg::normalize(vsg::cross(ecef_normal, vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), ecef_normal)));
 
+            std::cout << "1 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
+
             // set up the camera
             lookAt = vsg::LookAt::create(eye, centre, up);
+            setViewpointAfterLoad = false;
         }
         else
         {
-            lookAt = vsg::LookAt::create(centre + vsg::dvec3(radius * 3.5, 0.0, 0.0), centre, vsg::dvec3(0.0, 0.0, 1.0));
+            vsg::dvec3 eye = centre + vsg::dvec3(radius * 3.5, 0.0, 0.0);
+            vsg::dvec3 up = vsg::dvec3(0.0, 0.0, 1.0);
+            std::cout << "2 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
+
+            lookAt = vsg::LookAt::create(eye, centre, up);
             setViewpointAfterLoad = true;
         }
 
         if (useEllipsoidPerspective)
         {
-            perspective = vsg::EllipsoidPerspective::create(lookAt, ellipsoidModel, 30.0, static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height), nearFarRatio, horizonMountainHeight);
+            perspective = vsg::EllipsoidPerspective::create(
+                lookAt,
+                ellipsoidModel,
+                30.0,
+                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
+                nearFarRatio,
+                horizonMountainHeight);
         }
         else
         {
-            perspective = vsg::Perspective::create(30.0, static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height), nearFarRatio * radius, radius * 4.5);
+            perspective = vsg::Perspective::create(
+                30.0,
+                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
+                 nearFarRatio * radius,
+                 radius * 3.5);
         }
+
         auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(window->extent2D()));
+
+
         auto ui = vsgCs::UI::create();
+
         ui->createUI(window, viewer, camera, ellipsoidModel, environment->options);
+
         auto commandGraph = vsg::CommandGraph::create(window);
         auto renderGraph = vsg::RenderGraph::create(window);
         renderGraph->setClearValues({{0.02899f, 0.02899f, 0.13321f}});
@@ -255,11 +284,204 @@ int main(int argc, char** argv)
         renderGraph->addChild(view);
 
         renderGraph->addChild(ui->getImGui());
+
+#endif
+
+
+
+#if 1
+        ///##############################################################################
+        // compute the bounds of the scene graph to help position camera
+        ///##############################################################################s
+
+        // // Initialize viewer with tileset
+        // tilesetNode->initialize(viewer);
+
+        // Cesium3DTilesSelection::Tile* rootTile = NULL;
+        // if (tilesetNode->getTileset()) {
+        //     rootTile = tilesetNode->getTileset()->getRootTile();
+        //     auto boundingVolume = rootTile->getBoundingVolume();
+        //     const auto* boundingRegion = Cesium3DTilesSelection::getBoundingRegionFromBoundingVolume(boundingVolume);
+        //     std::cout << "boundingRegion:" << boundingRegion << std::endl;
+        // }
+        // auto boundingVolume = tile->getBoundingVolume();
+        // const auto* boundingRegion = getBoundingRegionFromBoundingVolume(boundingVolume);
+        // std::cout << "boundingRegion:" << boundingRegion << std::endl;
+
+
+
+
+        // root_tile for chunk-tileset-10006-8-112-86-2/tileset.json
+        CesiumGeospatial::BoundingRegion &boundingRegion = CesiumGeospatial::BoundingRegion(
+            CesiumGeospatial::GlobeRectangle(
+                -1.3852369180699862, 0.7642763493615176,
+                -1.3852278627153154, 0.7642829077772885
+            ),
+            115.82851939679875,
+            124.06955259992377
+        );
+        Cesium3DTilesSelection::BoundingVolume &boundingVolume = Cesium3DTilesSelection::BoundingVolume(boundingRegion);
+
+        auto cartoCenter = boundingRegion.getRectangle().computeCenter();
+        // The geographic coordinates specify a normal to the ellipsoid. How convenient!
+        auto normal = CesiumGeospatial::Ellipsoid::WGS84.geodeticSurfaceNormal(cartoCenter);
+        auto position = CesiumGeospatial::Ellipsoid::WGS84.cartographicToCartesian(cartoCenter);
+        auto vNormal = vsgCs::glm2vsg(normal);
+        auto vPosition = vsgCs::glm2vsg(position);
+        auto geoCenter = vsgCs::glm2vsg(Cesium3DTilesSelection::getBoundingVolumeCenter(boundingVolume));
+
+        double distance = vsg::length(vPosition - geoCenter) * 3.0;
+
+        vsg::dvec3 centre = vPosition;
+        double radius = vsg::length(vPosition - geoCenter);
+        double nearFarRatio = 0.000001;
+
+        // set up the camera
+        vsg::ref_ptr<vsg::LookAt> lookAt;
+        vsg::ref_ptr<vsg::ProjectionMatrix> perspective;
+        bool setViewpointAfterLoad = false;
+
+        vsg::dvec3 eye = centre + vsg::dvec3(radius * 3.5, 0.0, 0.0);
+        vsg::dvec3 up = vsg::dvec3(0.0, 0.0, 1.0);
+
+        centre = geoCenter;
+        std::cout << "init eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
+
+        lookAt = vsg::LookAt::create(eye, centre, up);
+        setViewpointAfterLoad = false;
+
+        // auto lookAt = vsg::LookAt::create(centre + vsg::dvec3(0.0, -radius * 3.5, 0.0),
+        //                                 centre, vsg::dvec3(0.0, 0.0, 1.0));
+
+        // auto perspective = vsg::Perspective::create(30.0, static_cast<double>(width) / static_cast<double>(height),
+        //                                             nearFarRatio * radius, radius * 4.5);
+
+        if (useEllipsoidPerspective)
+        {
+            perspective = vsg::EllipsoidPerspective::create(
+                lookAt,
+                ellipsoidModel,
+                30.0,
+                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
+                nearFarRatio,
+                horizonMountainHeight);
+        }
+        else
+        {
+            perspective = vsg::Perspective::create(
+                30.0,
+                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
+                 nearFarRatio * radius,
+                 radius * 3.5);
+        }
+
+        auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(window->extent2D()));
+
+
+        auto ui = vsgCs::UI::create();
+
+        // ui->createUI(window, viewer, camera, ellipsoidModel, environment->options);
+
+        ui->createUI2(window, viewer, camera, environment->options);
+
+        auto commandGraph = vsg::CommandGraph::create(window);
+        auto renderGraph = vsg::RenderGraph::create(window);
+        renderGraph->setClearValues({{0.02899f, 0.02899f, 0.13321f}});
+        commandGraph->addChild(renderGraph);
+
+        auto view = vsg::View::create(camera);
+        if (useHeadlight)
+        {
+            view->addChild(vsg::createHeadlight());
+        }
+        view->addChild(vsg_scene);
+        renderGraph->addChild(view);
+
+        renderGraph->addChild(ui->getImGui());
+
+#endif
+
+
+#if 0
+        auto ui = vsgCs::UI::create();
+        ui->createUI2(window, viewer, environment->options);
+
+        auto scenegraph = vsg_scene;
+
+        // compute the bounds of the scene graph to help position camera
+        // auto bounds = vsg::visit<vsg::ComputeBounds>(scenegraph).bounds;
+        vsg::dbox boundRadians = vsg::dbox(
+            vsg::dvec3(-1.3852369180699862, 0.7642763493615176, 115.82851939679875),
+            vsg::dvec3(-1.3852278627153154, 0.7642829077772885, 124.06955259992377));
+
+        vsg::dbox boundAltitudes =  vsg::dbox(
+            vsg::dvec3(
+                CesiumUtility::Math::radiansToDegrees(boundRadians.min.x),
+                CesiumUtility::Math::radiansToDegrees(boundRadians.min.y),
+                boundRadians.min.z
+            ),
+            vsg::dvec3(
+                CesiumUtility::Math::radiansToDegrees(boundRadians.max.x),
+                CesiumUtility::Math::radiansToDegrees(boundRadians.max.y),
+                boundRadians.max.z
+            )
+        );
+        vsg::dbox bounds =  vsg::dbox(
+            ellipsoidModel->convertLatLongAltitudeToECEF({
+                boundAltitudes.min.x,
+                boundAltitudes.min.y,
+                boundAltitudes.min.z
+            }),
+           ellipsoidModel->convertLatLongAltitudeToECEF({
+                boundAltitudes.max.x,
+                boundAltitudes.max.y,
+                boundAltitudes.max.z
+            })
+        );
+        vsg::dvec3 centre = (bounds.min + bounds.max) * 0.5;
+        double radius = vsg::length(bounds.max - bounds.min) * 0.5;
+        double nearFarRatio = 0.001;
+
+        // set up the camera
+        vsg::ref_ptr<vsg::LookAt> lookAt;
+        vsg::ref_ptr<vsg::ProjectionMatrix> perspective;
+        bool setViewpointAfterLoad = false;
+
+        uint32_t width = window->extent2D().width;
+        uint32_t height = window->extent2D().height;
+
+        // CommandGraph to hold the different RenderGraphs used to render each view
+        auto commandGraph = vsg::CommandGraph::create(window);
+
+        // set up main interactive view
+        {
+            auto lookAt = vsg::LookAt::create(centre + vsg::dvec3(0.0, -radius * 3.5, 0.0),
+                                            centre, vsg::dvec3(0.0, 0.0, 1.0));
+
+            auto perspective = vsg::Perspective::create(30.0, static_cast<double>(width) / static_cast<double>(height),
+                                                        nearFarRatio * radius, radius * 4.5);
+
+            auto viewportState = vsg::ViewportState::create(0, 0, width, height);
+
+            // create the vsg::RenderGraph and associated vsg::View
+            auto main_camera = vsg::Camera::create(perspective, lookAt, viewportState);
+            auto main_view = vsg::View::create(main_camera, scenegraph);
+            auto main_RenderGraph = vsg::RenderGraph::create(window, main_view);
+
+            commandGraph->addChild(main_RenderGraph);
+
+            viewer->addEventHandler(vsg::Trackball::create(main_camera));
+            // viewer->addEventHandler(CameraSelector::create(main_camera, scene_cameras));
+    }
+
+#endif
+
         viewer->assignRecordAndSubmitTaskAndPresentation({commandGraph});
         viewer->compile();
 
+        // Initialize viewer with tilesets
         tilesetNode->initialize(viewer);
-        
+
         // rendering main loop
         while (viewer->advanceToNextFrame() && (numFrames < 0 || (numFrames--) > 0))
         {
@@ -271,6 +493,45 @@ int main(int argc, char** argv)
                                                    poi_distance);
                 ui->setViewpoint(lookAt, 1.0);
                 setViewpointAfterLoad = false;
+
+#if 0
+
+                if (1) {
+                    auto scenegraph = vsg_scene;
+
+                    // CommandGraph to hold the different RenderGraphs used to render each view
+                    auto commandGraph = vsg::CommandGraph::create(window);
+
+                    // compute the bounds of the scene graph to help position camera
+                    auto bounds = vsg::visit<vsg::ComputeBounds>(scenegraph).bounds;
+                    vsg::dvec3 centre = (bounds.min + bounds.max) * 0.5;
+                    double radius = vsg::length(bounds.max - bounds.min) * 0.5;
+                    double nearFarRatio = 0.001;
+
+                    uint32_t width = window->extent2D().width;
+                    uint32_t height = window->extent2D().height;
+
+                    auto lookAt = vsg::LookAt::create(centre + vsg::dvec3(0.0, -radius * 3.5, 0.0),
+                                centre, vsg::dvec3(0.0, 0.0, 1.0));
+
+                    auto perspective = vsg::Perspective::create(30.0, static_cast<double>(width) / static_cast<double>(height),
+                                                                nearFarRatio * radius, radius * 4.5);
+
+                    auto viewportState = vsg::ViewportState::create(0, 0, width/4, height/4);
+
+                    // create the vsg::RenderGraph and associated vsg::View
+                    auto second_camera = vsg::Camera::create(perspective, lookAt, viewportState);
+
+                    auto second_view = vsg::View::create(second_camera, scenegraph);
+                    auto second_RenderGraph = vsg::RenderGraph::create(window, second_view);
+
+                    commandGraph->addChild(second_RenderGraph);
+
+                    viewer->assignRecordAndSubmitTaskAndPresentation({commandGraph});
+                    viewer->compile();
+                }
+#endif
+
             }
             // pass any events into EventHandlers assigned to the Viewer
             viewer->handleEvents();
