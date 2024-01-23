@@ -149,6 +149,7 @@ int main(int argc, char** argv)
                 std::cout << "Unable to load file " << filename << std::endl;
             }
         }
+
         vsgCs::startup();
         vsgCs::TilesetSource source;
         if (!tilesetUrl.empty())
@@ -169,6 +170,7 @@ int main(int argc, char** argv)
                 source.ionAssetEndpointUrl = ionEndpointUrl;
             }
         }
+
         // create the viewer and assign window(s) to it
         auto viewer = vsg::Viewer::create();
         if (!window)
@@ -176,6 +178,7 @@ int main(int argc, char** argv)
             std::cout << "Could not create windows." << std::endl;
             return 1;
         }
+
         Cesium3DTilesSelection::TilesetOptions tileOptions;
         tileOptions.enableOcclusionCulling = false;
         tileOptions.forbidHoles = true;
@@ -197,93 +200,6 @@ int main(int argc, char** argv)
         // compute the bounds of the scene graph to help position camera
         // XXX not yet
 
-
-#if 0
-        vsg::dvec3 centre(0.0, 0.0, 0.0);
-        double radius = ellipsoidModel->radiusEquator();
-
-        std::cout << "radius:" << radius << std::endl;
-
-        double nearFarRatio = 0.000001;
-
-        // set up the camera
-        vsg::ref_ptr<vsg::LookAt> lookAt;
-        vsg::ref_ptr<vsg::ProjectionMatrix> perspective;
-        bool setViewpointAfterLoad = false;
-        if (poi_latitude != invalid_value && poi_longitude != invalid_value)
-        {
-            std::cout << "poi_latitude:" << poi_latitude << ", poi_longitude:" << poi_longitude << std::endl;
-
-            double height = (poi_distance != invalid_value) ? poi_distance : radius * 3.5;
-            auto ecef = ellipsoidModel->convertLatLongAltitudeToECEF({poi_latitude, poi_longitude, 0.0});
-            auto ecef_normal = vsg::normalize(ecef);
-
-            centre = ecef;
-            vsg::dvec3 eye = centre + ecef_normal * height;
-            vsg::dvec3 up = vsg::normalize(vsg::cross(ecef_normal, vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), ecef_normal)));
-
-            std::cout << "1 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
-
-            // set up the camera
-            lookAt = vsg::LookAt::create(eye, centre, up);
-            setViewpointAfterLoad = false;
-        }
-        else
-        {
-            vsg::dvec3 eye = centre + vsg::dvec3(radius * 3.5, 0.0, 0.0);
-            vsg::dvec3 up = vsg::dvec3(0.0, 0.0, 1.0);
-            std::cout << "2 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
-
-            lookAt = vsg::LookAt::create(eye, centre, up);
-            setViewpointAfterLoad = true;
-        }
-
-        if (useEllipsoidPerspective)
-        {
-            perspective = vsg::EllipsoidPerspective::create(
-                lookAt,
-                ellipsoidModel,
-                30.0,
-                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
-                nearFarRatio,
-                horizonMountainHeight);
-        }
-        else
-        {
-            perspective = vsg::Perspective::create(
-                30.0,
-                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
-                 nearFarRatio * radius,
-                 radius * 3.5);
-        }
-
-        auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(window->extent2D()));
-
-
-        auto ui = vsgCs::UI::create();
-
-        ui->createUI(window, viewer, camera, ellipsoidModel, environment->options);
-
-        auto commandGraph = vsg::CommandGraph::create(window);
-        auto renderGraph = vsg::RenderGraph::create(window);
-        renderGraph->setClearValues({{0.02899f, 0.02899f, 0.13321f}});
-        commandGraph->addChild(renderGraph);
-
-        auto view = vsg::View::create(camera);
-        if (useHeadlight)
-        {
-            view->addChild(vsg::createHeadlight());
-        }
-        view->addChild(vsg_scene);
-        renderGraph->addChild(view);
-
-        renderGraph->addChild(ui->getImGui());
-
-#endif
-
-
-
-#if 1
         ///##############################################################################
         // compute the bounds of the scene graph to help position camera
         ///##############################################################################s
@@ -301,9 +217,6 @@ int main(int argc, char** argv)
         // auto boundingVolume = tile->getBoundingVolume();
         // const auto* boundingRegion = getBoundingRegionFromBoundingVolume(boundingVolume);
         // std::cout << "boundingRegion:" << boundingRegion << std::endl;
-
-
-
 
         // root_tile for chunk-tileset-10006-8-112-86-2/tileset.json
         CesiumGeospatial::BoundingRegion &boundingRegion = CesiumGeospatial::BoundingRegion(
@@ -366,14 +279,6 @@ int main(int argc, char** argv)
             setViewpointAfterLoad = false;
         }
 
-
-
-        // auto lookAt = vsg::LookAt::create(centre + vsg::dvec3(0.0, -radius * 3.5, 0.0),
-        //                                 centre, vsg::dvec3(0.0, 0.0, 1.0));
-
-        // auto perspective = vsg::Perspective::create(30.0, static_cast<double>(width) / static_cast<double>(height),
-        //                                             nearFarRatio * radius, radius * 4.5);
-
         if (useEllipsoidPerspective)
         {
             perspective = vsg::EllipsoidPerspective::create(
@@ -417,8 +322,6 @@ int main(int argc, char** argv)
 
         renderGraph->addChild(ui->getImGui());
 
-#endif
-
         viewer->assignRecordAndSubmitTaskAndPresentation({commandGraph});
         viewer->compile();
 
@@ -450,6 +353,7 @@ int main(int argc, char** argv)
         }
         tilesetNode->shutdown();
         vsgCs::shutdown();
+
     }
     catch (const vsg::Exception& ve)
     {
