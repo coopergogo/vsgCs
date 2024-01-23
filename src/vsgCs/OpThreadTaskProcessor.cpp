@@ -38,7 +38,7 @@ using namespace vsgCs;
 
 AsyncSystemWrapper::AsyncSystemWrapper()
     : taskProcessor(std::make_shared<OpThreadTaskProcessor>(
-        std::thread::hardware_concurrency() * 2 < 12 ? 12 : std::thread::hardware_concurrency() * 2)),
+        std::thread::hardware_concurrency() < 6 ? 6 : std::thread::hardware_concurrency() )),
       asyncSystem(taskProcessor)
 {
 }
