@@ -47,6 +47,9 @@ SOFTWARE.
 #include "vsgCs/OpThreadTaskProcessor.h"
 #include "vsgCs/RuntimeEnvironment.h"
 #include "UI.h"
+#include "cesium_client.h"
+
+using namespace vsgCs;
 
 void usage(const char* name)
 {
@@ -79,14 +82,7 @@ int main(int argc, char** argv)
             usage(argv[0]);
             return 0;
         }
-        // set up vsg::Options to pass in filepaths and ReaderWriter's and other IO related options to use when reading and writing files.
-        auto environment = vsgCs::RuntimeEnvironment::get();
-        auto window = environment->openWindow(arguments, "csclient");
-#ifdef vsgXchange_FOUND
-        // add vsgXchange's support for reading and writing 3rd party file formats
-        environment->options->add(vsgXchange::all::create());
-        arguments.read(environment->options);
-#endif
+
         auto numFrames = arguments.value(-1, "-f");
         auto pathFilename = arguments.value(std::string(), "-p");
         auto horizonMountainHeight = arguments.value(0.0, "--hmh");
@@ -98,10 +94,10 @@ int main(int argc, char** argv)
         double poi_distance = invalid_value;
         while (arguments.read("--poi", poi_latitude, poi_longitude)) {};
         while (arguments.read("--distance", poi_distance)) {};
-        if (int log_level = 0; arguments.read("--log-level", log_level))
-        {
-            vsg::Logger::instance()->level = static_cast<vsg::Logger::Level>(log_level);
-        }
+
+        int log_level = 0;
+        while (arguments.read("--log-level", log_level)) {};
+
         auto ionAsset = arguments.value<int64_t>(-1L, "--ion-asset");
         auto ionOverlay = arguments.value<int64_t>(-1L, "--ion-overlay");
         auto tilesetUrl = arguments.value(std::string(), "--tileset-url");
@@ -112,6 +108,85 @@ int main(int argc, char** argv)
         {
             return arguments.writeErrorMessages(std::cerr);
         }
+
+        // read any vsg files
+        vsg::Path file_path = "";
+        if (argc >= 2)
+        {
+            file_path = arguments[1];
+        }
+
+        vsg::ref_ptr<vsgCs::CommandOptions> options = vsgCs::CommandOptions::create();
+
+        options->file_path = file_path;
+        options->numFrames = numFrames;
+        options->pathFilename = pathFilename;
+        options->horizonMountainHeight = horizonMountainHeight;
+        options->useEllipsoidPerspective = useEllipsoidPerspective;
+
+        options->poi_latitude = poi_latitude;
+        options->poi_longitude = poi_longitude;
+        options->poi_distance = poi_distance;
+        options->log_level = log_level;
+
+        options->ionAsset = ionAsset;
+        options->ionOverlay = ionOverlay;
+        options->tilesetUrl = tilesetUrl;
+        options->ionEndpointUrl = ionEndpointUrl;
+        options->useHeadlight = useHeadlight;
+
+        vsgCs::CesiumClient csclient;
+
+        int ret = csclient.renderCesium(options);
+
+        return 0;
+    }
+    catch (const vsg::Exception& ve)
+    {
+        for (int i = 0; i < argc; ++i)
+        {
+            std::cerr << argv[i] << " ";
+        }
+        std::cerr << "\n[Exception] - " << ve.message << " result = " << ve.result << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &options)
+{
+    vsg::Path filename = options->file_path;
+
+    int numFrames = options->numFrames;
+    std::string pathFilename = options->pathFilename;
+    double horizonMountainHeight = options->horizonMountainHeight;
+    bool useEllipsoidPerspective = options->useEllipsoidPerspective;
+
+    double poi_latitude = options->poi_latitude;
+    double poi_longitude = options->poi_longitude;
+    double poi_distance = options->poi_distance;
+    int log_level = options->log_level;
+
+    long ionAsset = options->ionAsset;
+    long ionOverlay = options->ionOverlay;
+    std::string tilesetUrl = options->tilesetUrl;
+    std::string ionEndpointUrl = options->ionEndpointUrl;
+    bool useHeadlight = options->useHeadlight;
+
+    try
+    {
+        // set up vsg::Options to pass in filepaths and ReaderWriter's and other IO related options to use when reading and writing files.
+        auto environment = vsgCs::RuntimeEnvironment::get();
+        // auto window = environment->openWindow(arguments, "csclient");
+        auto window = environment->openWindow("csclient");
+
+#ifdef vsgXchange_FOUND
+        // add vsgXchange's support for reading and writing 3rd party file formats
+        environment->options->add(vsgXchange::all::create());
+        vsg::CommandLine arguments;
+        arguments.read(environment->options);
+#endif
 
         auto vsg_scene = vsg::Group::create();
 
@@ -130,10 +205,9 @@ int main(int argc, char** argv)
             vsg_scene->addChild(directionalLight);
         }
 
-        // read any vsg files
-        for (int i = 1; i < argc; ++i)
+        // read vsg file
         {
-            vsg::Path filename = arguments[i];
+            vsg::Path filename = options->file_path;
 
             auto object = vsg::read(filename, environment->options);
             if (auto node = object.cast<vsg::Node>(); node)
@@ -149,6 +223,7 @@ int main(int argc, char** argv)
                 std::cout << "Unable to load file " << filename << std::endl;
             }
         }
+
         vsgCs::startup();
         vsgCs::TilesetSource source;
         if (!tilesetUrl.empty())
@@ -168,7 +243,9 @@ int main(int argc, char** argv)
             {
                 source.ionAssetEndpointUrl = ionEndpointUrl;
             }
+
         }
+
         // create the viewer and assign window(s) to it
         auto viewer = vsg::Viewer::create();
         if (!window)
@@ -176,6 +253,7 @@ int main(int argc, char** argv)
             std::cout << "Could not create windows." << std::endl;
             return 1;
         }
+
         Cesium3DTilesSelection::TilesetOptions tileOptions;
         tileOptions.enableOcclusionCulling = false;
         tileOptions.forbidHoles = true;
@@ -197,93 +275,6 @@ int main(int argc, char** argv)
         // compute the bounds of the scene graph to help position camera
         // XXX not yet
 
-
-#if 0
-        vsg::dvec3 centre(0.0, 0.0, 0.0);
-        double radius = ellipsoidModel->radiusEquator();
-
-        std::cout << "radius:" << radius << std::endl;
-
-        double nearFarRatio = 0.000001;
-
-        // set up the camera
-        vsg::ref_ptr<vsg::LookAt> lookAt;
-        vsg::ref_ptr<vsg::ProjectionMatrix> perspective;
-        bool setViewpointAfterLoad = false;
-        if (poi_latitude != invalid_value && poi_longitude != invalid_value)
-        {
-            std::cout << "poi_latitude:" << poi_latitude << ", poi_longitude:" << poi_longitude << std::endl;
-
-            double height = (poi_distance != invalid_value) ? poi_distance : radius * 3.5;
-            auto ecef = ellipsoidModel->convertLatLongAltitudeToECEF({poi_latitude, poi_longitude, 0.0});
-            auto ecef_normal = vsg::normalize(ecef);
-
-            centre = ecef;
-            vsg::dvec3 eye = centre + ecef_normal * height;
-            vsg::dvec3 up = vsg::normalize(vsg::cross(ecef_normal, vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), ecef_normal)));
-
-            std::cout << "1 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
-
-            // set up the camera
-            lookAt = vsg::LookAt::create(eye, centre, up);
-            setViewpointAfterLoad = false;
-        }
-        else
-        {
-            vsg::dvec3 eye = centre + vsg::dvec3(radius * 3.5, 0.0, 0.0);
-            vsg::dvec3 up = vsg::dvec3(0.0, 0.0, 1.0);
-            std::cout << "2 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
-
-            lookAt = vsg::LookAt::create(eye, centre, up);
-            setViewpointAfterLoad = true;
-        }
-
-        if (useEllipsoidPerspective)
-        {
-            perspective = vsg::EllipsoidPerspective::create(
-                lookAt,
-                ellipsoidModel,
-                30.0,
-                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
-                nearFarRatio,
-                horizonMountainHeight);
-        }
-        else
-        {
-            perspective = vsg::Perspective::create(
-                30.0,
-                static_cast<double>(window->extent2D().width) / static_cast<double>(window->extent2D().height),
-                 nearFarRatio * radius,
-                 radius * 3.5);
-        }
-
-        auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(window->extent2D()));
-
-
-        auto ui = vsgCs::UI::create();
-
-        ui->createUI(window, viewer, camera, ellipsoidModel, environment->options);
-
-        auto commandGraph = vsg::CommandGraph::create(window);
-        auto renderGraph = vsg::RenderGraph::create(window);
-        renderGraph->setClearValues({{0.02899f, 0.02899f, 0.13321f}});
-        commandGraph->addChild(renderGraph);
-
-        auto view = vsg::View::create(camera);
-        if (useHeadlight)
-        {
-            view->addChild(vsg::createHeadlight());
-        }
-        view->addChild(vsg_scene);
-        renderGraph->addChild(view);
-
-        renderGraph->addChild(ui->getImGui());
-
-#endif
-
-
-
-#if 1
         ///##############################################################################
         // compute the bounds of the scene graph to help position camera
         ///##############################################################################s
@@ -301,9 +292,6 @@ int main(int argc, char** argv)
         // auto boundingVolume = tile->getBoundingVolume();
         // const auto* boundingRegion = getBoundingRegionFromBoundingVolume(boundingVolume);
         // std::cout << "boundingRegion:" << boundingRegion << std::endl;
-
-
-
 
         // root_tile for chunk-tileset-10006-8-112-86-2/tileset.json
         CesiumGeospatial::BoundingRegion &boundingRegion = CesiumGeospatial::BoundingRegion(
@@ -335,6 +323,7 @@ int main(int argc, char** argv)
         vsg::ref_ptr<vsg::ProjectionMatrix> perspective;
         bool setViewpointAfterLoad = false;
 
+        const double invalid_value = std::numeric_limits<double>::max();
         if (poi_latitude != invalid_value && poi_longitude != invalid_value)
         {
             std::cout << "poi_latitude:" << poi_latitude << ", poi_longitude:" << poi_longitude << std::endl;
@@ -365,14 +354,6 @@ int main(int argc, char** argv)
             lookAt = vsg::LookAt::create(eye, centre, up);
             setViewpointAfterLoad = false;
         }
-
-
-
-        // auto lookAt = vsg::LookAt::create(centre + vsg::dvec3(0.0, -radius * 3.5, 0.0),
-        //                                 centre, vsg::dvec3(0.0, 0.0, 1.0));
-
-        // auto perspective = vsg::Perspective::create(30.0, static_cast<double>(width) / static_cast<double>(height),
-        //                                             nearFarRatio * radius, radius * 4.5);
 
         if (useEllipsoidPerspective)
         {
@@ -417,8 +398,6 @@ int main(int argc, char** argv)
 
         renderGraph->addChild(ui->getImGui());
 
-#endif
-
         viewer->assignRecordAndSubmitTaskAndPresentation({commandGraph});
         viewer->compile();
 
@@ -453,10 +432,6 @@ int main(int argc, char** argv)
     }
     catch (const vsg::Exception& ve)
     {
-        for (int i = 0; i < argc; ++i)
-        {
-            std::cerr << argv[i] << " ";
-        }
         std::cerr << "\n[Exception] - " << ve.message << " result = " << ve.result << std::endl;
         return 1;
     }
