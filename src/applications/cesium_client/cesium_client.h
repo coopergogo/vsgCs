@@ -34,6 +34,8 @@ namespace vsgCs
     class CommandOptions : public vsg::Inherit<vsg::Object, CommandOptions>
     {
         public:
+        vsg::CommandLine *arguments;
+
         vsg::Path file_path;
         int numFrames;
         std::string pathFilename;

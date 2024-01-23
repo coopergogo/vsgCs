@@ -118,6 +118,8 @@ int main(int argc, char** argv)
 
         vsg::ref_ptr<vsgCs::CommandOptions> options = vsgCs::CommandOptions::create();
 
+        options->arguments = &arguments;
+
         options->file_path = file_path;
         options->numFrames = numFrames;
         options->pathFilename = pathFilename;
@@ -154,37 +156,40 @@ int main(int argc, char** argv)
     return 0;
 }
 
-int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &options)
+int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &commandOptions)
 {
-    vsg::Path filename = options->file_path;
+    vsg::CommandLine *arguments = commandOptions->arguments;
+    vsg::Path filename = commandOptions->file_path;
 
-    int numFrames = options->numFrames;
-    std::string pathFilename = options->pathFilename;
-    double horizonMountainHeight = options->horizonMountainHeight;
-    bool useEllipsoidPerspective = options->useEllipsoidPerspective;
+    int numFrames = commandOptions->numFrames;
+    std::string pathFilename = commandOptions->pathFilename;
+    double horizonMountainHeight = commandOptions->horizonMountainHeight;
+    bool useEllipsoidPerspective = commandOptions->useEllipsoidPerspective;
 
-    double poi_latitude = options->poi_latitude;
-    double poi_longitude = options->poi_longitude;
-    double poi_distance = options->poi_distance;
-    int log_level = options->log_level;
+    double poi_latitude = commandOptions->poi_latitude;
+    double poi_longitude = commandOptions->poi_longitude;
+    double poi_distance = commandOptions->poi_distance;
+    int log_level = commandOptions->log_level;
 
-    long ionAsset = options->ionAsset;
-    long ionOverlay = options->ionOverlay;
-    std::string tilesetUrl = options->tilesetUrl;
-    std::string ionEndpointUrl = options->ionEndpointUrl;
-    bool useHeadlight = options->useHeadlight;
+    long ionAsset = commandOptions->ionAsset;
+    long ionOverlay = commandOptions->ionOverlay;
+    std::string tilesetUrl = commandOptions->tilesetUrl;
+    std::string ionEndpointUrl = commandOptions->ionEndpointUrl;
+    bool useHeadlight = commandOptions->useHeadlight;
 
     try
     {
         // set up vsg::Options to pass in filepaths and ReaderWriter's and other IO related options to use when reading and writing files.
         auto environment = vsgCs::RuntimeEnvironment::get();
-        // auto window = environment->openWindow(arguments, "csclient");
-        auto window = environment->openWindow("csclient");
-
+        auto window = environment->openWindow(*arguments, "cesium_client");
+        if (!window)
+        {
+            std::cout << "Could not create window." << std::endl;
+            return 1;
+        }
 #ifdef vsgXchange_FOUND
         // add vsgXchange's support for reading and writing 3rd party file formats
         environment->options->add(vsgXchange::all::create());
-        vsg::CommandLine arguments;
         arguments.read(environment->options);
 #endif
 
@@ -207,7 +212,7 @@ int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &option
 
         // read vsg file
         {
-            vsg::Path filename = options->file_path;
+            vsg::Path filename = commandOptions->file_path;
 
             auto object = vsg::read(filename, environment->options);
             if (auto node = object.cast<vsg::Node>(); node)
