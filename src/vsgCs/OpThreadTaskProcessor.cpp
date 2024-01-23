@@ -22,6 +22,7 @@ SOFTWARE.
 
 </editor-fold> */
 
+#include <thread>
 #include "OpThreadTaskProcessor.h"
 
 namespace vsgCs
@@ -36,7 +37,8 @@ namespace vsgCs
 using namespace vsgCs;
 
 AsyncSystemWrapper::AsyncSystemWrapper()
-    : taskProcessor(std::make_shared<OpThreadTaskProcessor>(4)),
+    : taskProcessor(std::make_shared<OpThreadTaskProcessor>(
+        std::thread::hardware_concurrency() * 2 < 12 ? 12 : std::thread::hardware_concurrency() * 2)),
       asyncSystem(taskProcessor)
 {
 }
