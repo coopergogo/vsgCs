@@ -237,8 +237,6 @@ int main(int argc, char** argv)
         auto vPosition = vsgCs::glm2vsg(position);
         auto geoCenter = vsgCs::glm2vsg(Cesium3DTilesSelection::getBoundingVolumeCenter(boundingVolume));
 
-        double distance = vsg::length(vPosition - geoCenter) * 3.0;
-
         vsg::dvec3 centre = vPosition;
         double radius = vsg::length(vPosition - geoCenter);
         double nearFarRatio = 0.000001;
@@ -260,23 +258,31 @@ int main(int argc, char** argv)
             vsg::dvec3 eye = centre + ecef_normal * height;
             vsg::dvec3 up = vsg::normalize(vsg::cross(ecef_normal, vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), ecef_normal)));
 
-            std::cout << "1 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
+            centre = geoCenter;
+            std::cout << "init1 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
 
             // set up the camera
-            centre = geoCenter;
             lookAt = vsg::LookAt::create(eye, centre, up);
-            setViewpointAfterLoad = false;
         }
         else
         {
-            vsg::dvec3 eye = centre + vsg::dvec3(radius * 3.5, 0.0, 0.0);
-            vsg::dvec3 up = vsg::dvec3(0.0, 0.0, 1.0);
+            // vsg::dvec3 eye = centre + vsg::dvec3(radius * 3.5, 0.0, 0.0);
+            // vsg::dvec3 up = vsg::dvec3(0.0, 0.0, 1.0);
+
+            double distance = vsg::length(vPosition - geoCenter) * 3.0;
+
+            vsg::dvec3 eye = vPosition +  vNormal * distance;
+            vsg::dvec3 direction = -vNormal;
+
+            // Try to align up with North
+            auto side = vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), direction);
+            side = vsg::normalize(side);
+            vsg::dvec3 up = vsg::cross(direction, side);
 
             centre = geoCenter;
-            std::cout << "init eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
+            std::cout << "init2 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
 
             lookAt = vsg::LookAt::create(eye, centre, up);
-            setViewpointAfterLoad = false;
         }
 
         if (useEllipsoidPerspective)
