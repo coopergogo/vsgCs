@@ -43,7 +43,7 @@ namespace vsgCs
         std::optional<std::string> ionAccessToken;
         std::optional<std::string> ionAssetEndpointUrl;
     };
-    
+
     class VSGCS_EXPORT TilesetNode : public vsg::Inherit<vsg::Node, TilesetNode>
     {
     public:
@@ -94,10 +94,11 @@ namespace vsgCs
     protected:
         const Cesium3DTilesSelection::ViewUpdateResult* _viewUpdateResult;
         std::unique_ptr<Cesium3DTilesSelection::Tileset> _tileset;
+        std::string _sourceUri;
         std::vector<vsg::ref_ptr<CsOverlay>> _overlays;
     private:
         template<class V> void t_traverse(V& visitor) const;
         int32_t _tilesetsBeingDestroyed;
-        
+
     };
 }
