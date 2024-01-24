@@ -40,7 +40,7 @@ public:
     {
         return _statusCode;
     }
-    
+
     std::string contentType() const override
     {
         return _contentType;
@@ -50,7 +50,7 @@ public:
     {
         return _headers;
     }
-    
+
     gsl::span<const std::byte> data() const override
     {
         return {const_cast<const std::byte*>(_result.data()), _result.size()};
@@ -72,7 +72,7 @@ public:
                     CesiumAsync::HttpHeaders headers)
         : _method(std::move(method)), _url(std::move(url)), _headers(std::move(headers))
     {
-        
+
     }
 
     UrlAssetRequest(std::string method, std::string url,
@@ -82,7 +82,7 @@ public:
         _headers.insert(headers.begin(), headers.end());
     }
 
-    
+
     const std::string& method() const override
     {
         return this->_method;
@@ -234,7 +234,7 @@ curl_slist* setCommonOptions(CURL* curl, const std::string& url, const std::stri
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     return list;
 }
-    
+
 CesiumAsync::Future<std::shared_ptr<CesiumAsync::IAssetRequest>>
 UrlAssetAccessor::get(const CesiumAsync::AsyncSystem& asyncSystem,
                       const std::string& url,
@@ -254,6 +254,11 @@ UrlAssetAccessor::get(const CesiumAsync::AsyncSystem& asyncSystem,
                                                   request->headers());
               std::unique_ptr<UrlAssetResponse> response = std::make_unique<UrlAssetResponse>();
               response->setCallbacks(curl());
+
+              // Debug: print http request
+              std::time_t now = std::time(nullptr);
+              vsg::warn("request start: ",std::asctime(std::localtime(&now)), request->url());
+
               CURLcode responseCode = curl_easy_perform(curl());
               curl_slist_free_all(list);
               if (responseCode == 0)
@@ -304,6 +309,11 @@ UrlAssetAccessor::request(const CesiumAsync::AsyncSystem& asyncSystem,
 
                 curl_slist* list = setCommonOptions(curl(), request->url(), accessor->userAgent,
                                                     request->headers());
+
+                // Debug: print http request
+                std::time_t now = std::time(nullptr);
+                vsg::warn("request start: ",std::asctime(std::localtime(&now)), request->url());
+
                 if (payloadCopy->size() > 1UL << 31)
                 {
                     curl_easy_setopt(curl(), CURLOPT_POSTFIELDSIZE_LARGE, payloadCopy->size());
