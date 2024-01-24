@@ -68,6 +68,9 @@ namespace vsgCs
          */
         void updateViews(const vsg::ref_ptr<vsg::Viewer>& viewer);
         // void attachToViewer(vsg::ref_ptr<vsg::Viewer> viewer, vsg::ref_ptr<vsg::Group> attachment);
+
+        std::vector<Cesium3DTilesSelection::Tile*> getRenderTiles();
+
         void traverse(vsg::Visitor& visitor) override;
         void traverse(vsg::ConstVisitor& visitor) const override;
         void traverse(vsg::RecordTraversal& visitor) const override;

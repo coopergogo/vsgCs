@@ -437,6 +437,10 @@ int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &comman
             viewer->recordAndSubmit();
 
             viewer->present();
+
+            auto &renderTiles = tilesetNode->getRenderTiles();
+
+            vsg::warn("viewer-loop-end render-tiles-count:", renderTiles.size());
         }
         tilesetNode->shutdown();
         vsgCs::shutdown();

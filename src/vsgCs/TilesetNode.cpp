@@ -155,6 +155,38 @@ TilesetNode::~TilesetNode()
     shutdown();
 }
 
+std::vector<Cesium3DTilesSelection::Tile*> TilesetNode::getRenderTiles()
+{
+    std::vector<Cesium3DTilesSelection::Tile*> renderTiles = std::vector<Cesium3DTilesSelection::Tile*>{};
+    if (_viewUpdateResult)
+    {
+        long long tileCount = 0;
+        for (auto* tile : _viewUpdateResult->tilesToRenderThisFrame)
+        {
+            const auto& tileContent = tile->getContent();
+            if (tileContent.isRenderContent())
+            {
+                tileCount++;
+#if 0
+                std::time_t now = std::time(nullptr);
+                auto timestampMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+                auto tileIDStr =  Cesium3DTilesSelection::TileIdUtilities::createTileIdString(tile->getTileID());
+                vsg::warn("tileContentRender: ", timestampMs, " - ", tileIDStr);
+#endif
+                renderTiles.push_back(tile);
+            }
+        }
+
+# if 0
+        vsg::warn("tileContentRender: ", " - render-tile-count:", tileCount);
+#endif
+
+    }
+
+    return renderTiles;
+}
+
 template<class V>
 void TilesetNode::t_traverse(V& visitor) const
 {
@@ -181,7 +213,7 @@ void TilesetNode::t_traverse(V& visitor) const
             }
         }
 
-# if 1
+# if 0
         vsg::warn("tileContentRender: ", " - render-tile-count:", tileCount);
 #endif
 
