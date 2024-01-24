@@ -29,7 +29,7 @@ SOFTWARE.
 #include <CesiumAsync/IAssetResponse.h>
 
 #include <cstring>
-
+#include <ctime>
 
 using namespace vsgCs;
 
