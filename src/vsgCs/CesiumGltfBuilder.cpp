@@ -156,7 +156,7 @@ vsg::ref_ptr<vsg::StateCommand> makeTileStateCommand(const vsg::ref_ptr<Graphics
         overlayParams[i] = rasterData.overlayParams;
     }
     descriptorBuilder->assignTexture("overlayTextures", rasterImages);
-    auto ubo = pbr::makeTileData(tile.getGeometricError(), std::min(genv->features.pointSizeRange[1], 4.0f),
+    auto ubo = pbr::makeTileData(tile.getGeometricError(), std::min(genv->features.pointSizeRange[1], 1.0f),
                                  overlayParams);
     descriptorBuilder->assignUniform("tileParams", ubo);
     descriptorBuilder->init();
