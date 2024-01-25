@@ -50,6 +50,12 @@ namespace vsgCs
         void initialize(vsg::CommandLine& arguments,
                         const vsg::ref_ptr<vsg::WindowTraits>& traits = {},
                         const vsg::ref_ptr<vsg::Options>& options = {});
+
+        vsg::ref_ptr<vsg::Options> initializeOptions(const vsg::ref_ptr<vsg::Options>& options= {});
+        vsg::ref_ptr<vsg::WindowTraits> initializeTraits(const vsg::ref_ptr< vsg::WindowTraits>& traits = {});
+        void initializeCs();
+        void initialize(const vsg::ref_ptr<vsg::WindowTraits>& traits = {},
+                        const vsg::ref_ptr<vsg::Options>& options = {});
         // Open window without creating a Vulkan logical device
         vsg::ref_ptr<vsg::Window> openSystemWindow(const std::string& name,
                                                    const vsg::ref_ptr<vsg::WindowTraits>& traits = {},

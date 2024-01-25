@@ -124,6 +124,44 @@ void RuntimeEnvironment::initialize(vsg::CommandLine &arguments,
     initializeCs(arguments);
 }
 
+vsg::ref_ptr<vsg::Options> RuntimeEnvironment::initializeOptions(const vsg::ref_ptr<vsg::Options>& in_options)
+{
+    options = in_options;
+    if (!options)
+    {
+        options = vsg::Options::create();
+    }
+    // We want to support VSG_FILE_PATH, if only for reading vsgCs files (shaders, icons) from a
+    // development tree. What if the app doesn't want it? an option?
+    vsg::Paths vsgFilePaths = vsg::getEnvPaths("VSG_FILE_PATH");
+    options->paths.insert(options->paths.end(), vsgFilePaths.begin(), vsgFilePaths.end());
+    options->paths.insert(options->paths.end(), vsg::Path(VSGCS_FULL_DATA_DIR));
+    options->sharedObjects = vsg::SharedObjects::create();
+    return options;
+}
+
+vsg::ref_ptr<vsg::WindowTraits> RuntimeEnvironment::initializeTraits(const vsg::ref_ptr< vsg::WindowTraits>& in_traits)
+{
+    traits = in_traits;
+    if (!traits)
+    {
+        traits = vsg::WindowTraits::create();
+    }
+    traits->swapchainPreferences.surfaceFormat = {VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+    return traits;
+}
+
+void RuntimeEnvironment::initializeCs()
+{
+}
+
+void RuntimeEnvironment::initialize(const vsg::ref_ptr<vsg::WindowTraits>& in_traits,
+                                    const vsg::ref_ptr<vsg::Options>& in_options) {
+    initializeOptions(in_options);
+    initializeTraits(in_traits);
+    initializeCs();
+}
+
 vsg::ref_ptr<vsg::Window> RuntimeEnvironment::openSystemWindow(const std::string& name,
                                                                const vsg::ref_ptr<vsg::WindowTraits>& in_traits,
                                                                const vsg::ref_ptr<vsg::Options>& in_options)
@@ -131,10 +169,14 @@ vsg::ref_ptr<vsg::Window> RuntimeEnvironment::openSystemWindow(const std::string
     if (in_traits)
     {
         traits = in_traits;
+    } else {
+        initializeTraits(in_traits);
     }
     if (in_options)
     {
         options = in_options;
+    } else {
+        initializeOptions(in_options);
     }
     traits->windowTitle = name;
     return vsg::Window::create(traits);
