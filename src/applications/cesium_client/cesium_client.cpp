@@ -443,12 +443,12 @@ int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &comman
 
             // tilesetNode->getRenderTilesContent();
 
-            auto renderContent = tilesetNode->getRenderContent();
-            vsg::warn("viewer-loop-end - ", "render-tiles-count:", renderContent->renderTiles.size(),
-                ", positions-count:", renderContent->positions.size(),
-                ", colors-count:", renderContent->colors.size()
-                );
-            delete renderContent;
+            // auto renderContent = tilesetNode->getRenderContent();
+            // // vsg::warn("viewer-loop-end - ", "render-tiles-count:", renderContent->renderTiles.size(),
+            // //     ", positions-count:", renderContent->positions.size(),
+            // //     ", colors-count:", renderContent->colors.size()
+            // //     );
+            // delete renderContent;
 
         }
         tilesetNode->shutdown();

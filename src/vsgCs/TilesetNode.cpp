@@ -618,10 +618,10 @@ RenderContent* TilesetNode::getRenderContent()
                             position += glm::vec3(rtcExt->center[0], rtcExt->center[1], rtcExt->center[2]);
                         }
 
-                        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
-                            ", positionCount:", positionCount, ", index:", i,
-                            ", position0 x:", position.x, ", y:", position.y, ", z:", position.z
-                            );
+                        // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                        //     ", positionCount:", positionCount, ", index:", i,
+                        //     ", position0 x:", position.x, ", y:", position.y, ", z:", position.z
+                        //     );
 
                         renderContent->positions.push_back(position);
                     }
@@ -673,10 +673,10 @@ RenderContent* TilesetNode::getRenderContent()
                         color = glm::pow(color, glm::vec3(1.0 / 2.2));
                         color *= 255;
 
-                        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
-                            ", colorCount:", colorCount, ", index:", i,
-                            ", color0 r:", color.x, ", g:", color.y, ", b:", color.z
-                            );
+                        // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                        //     ", colorCount:", colorCount, ", index:", i,
+                        //     ", color0 r:", color.x, ", g:", color.y, ", b:", color.z
+                        //     );
 
                         renderContent->colors.push_back(color);
                     }
