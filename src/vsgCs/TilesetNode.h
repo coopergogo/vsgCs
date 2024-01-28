@@ -44,6 +44,13 @@ namespace vsgCs
         std::optional<std::string> ionAssetEndpointUrl;
     };
 
+    struct VSGCS_EXPORT RenderContent
+    {
+        std::vector<Cesium3DTilesSelection::Tile *> renderTiles;
+        std::vector<glm::vec3> positions;
+        std::vector<glm::vec3> colors;
+    };
+
     class VSGCS_EXPORT TilesetNode : public vsg::Inherit<vsg::Node, TilesetNode>
     {
     public:
@@ -70,6 +77,8 @@ namespace vsgCs
         // void attachToViewer(vsg::ref_ptr<vsg::Viewer> viewer, vsg::ref_ptr<vsg::Group> attachment);
 
         std::vector<Cesium3DTilesSelection::Tile*> getRenderTiles();
+        std::vector<Cesium3DTilesSelection::Tile*> getRenderTilesContent();
+        RenderContent* getRenderContent();
 
         void traverse(vsg::Visitor& visitor) override;
         void traverse(vsg::ConstVisitor& visitor) const override;

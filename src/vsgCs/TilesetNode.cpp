@@ -32,9 +32,15 @@ SOFTWARE.
 #include "UrlAssetAccessor.h"
 
 #include <CesiumUtility/JsonHelpers.h>
+#include <CesiumGltf/AccessorView.h>
+#include <CesiumGltf/Accessor.h>
+#include <CesiumGltf/Buffer.h>
+#include <CesiumGltf/ExtensionCesiumRTC.h>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/gtx/color_encoding.hpp>
+#include <glm/gtc/color_space.hpp>
 
 #include <optional>
 #include <cmath>
@@ -168,7 +174,6 @@ std::vector<Cesium3DTilesSelection::Tile*> TilesetNode::getRenderTiles()
             {
                 tileCount++;
 #if 0
-                std::time_t now = std::time(nullptr);
                 auto timestampMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
                 auto tileIDStr =  Cesium3DTilesSelection::TileIdUtilities::createTileIdString(tile->getTileID());
@@ -185,6 +190,520 @@ std::vector<Cesium3DTilesSelection::Tile*> TilesetNode::getRenderTiles()
     }
 
     return renderTiles;
+}
+
+
+std::vector<Cesium3DTilesSelection::Tile*> TilesetNode::getRenderTilesContent()
+{
+    std::vector<Cesium3DTilesSelection::Tile *> renderTiles = std::vector<Cesium3DTilesSelection::Tile *>{};
+    if (_viewUpdateResult)
+    {
+        // get all render-tiles
+        long long tileCount = 0;
+        for (auto* tile : _viewUpdateResult->tilesToRenderThisFrame)
+        {
+            const auto& tileContent = tile->getContent();
+            if (tileContent.isRenderContent())
+            {
+                tileCount++;
+                renderTiles.push_back(tile);
+            }
+        }
+        // vsg::warn("tileContentRender: ", " - render-tile-count:", tileCount);
+
+#if 0
+        // get mergedGltf for all gltf-models
+        CesiumGltf::Model &mergedModel = CesiumGltf::Model();
+        for (auto* tile : renderTiles)
+        {
+            const auto& tileContent = tile->getContent();
+            CesiumGltf::Model gltfModel = tileContent.getRenderContent()->getModel();
+
+            mergedModel.merge(std::move(gltfModel));
+        }
+
+        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            ", gltf.meshes:", mergedModel.meshes.size(),
+            ", gltf.accessors:", mergedModel.accessors.size(),
+            ", gltf.buffers:", mergedModel.buffers.size()
+            );
+
+        // get mergedGltf buffer0 point-count
+        if (mergedModel.buffers.size() > 0 ) {
+            const CesiumGltf::Buffer& buffer = mergedModel.buffers.front();
+
+            // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            //     // ", gltf.meshes:", mergedModel.meshes.size(),
+            //     // ", gltf.accessors:", mergedModel.accessors.size(),
+            //     ", gltf.buffers:", mergedModel.buffers.size(),
+            //     // ", gltf.buffer0.byteLength:", buffer.byteLength,
+            //     // ", gltf.buffer0.data.size:", buffer.cesium.data.size(),
+            //     ", gltf.buffer0.data.count:", buffer.cesium.data.size()/sizeof(glm::vec3)
+            //     );
+
+        }
+
+#endif
+
+#if 0
+        // get all gltf-models with points
+        long long pointCount = 0;
+        for (auto* tile : renderTiles)
+        {
+            const auto& tileContent = tile->getContent();
+            CesiumGltf::Model gltfModel = tileContent.getRenderContent()->getModel();
+
+            CesiumGltf::ExtensionCesiumRTC *rtcExt = NULL;
+            if (gltfModel.hasExtension<CesiumGltf::ExtensionCesiumRTC>()) {
+                rtcExt = gltfModel.getExtension<CesiumGltf::ExtensionCesiumRTC>();
+                vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    ", gltf.meshes:", gltfModel.meshes.size(),
+                    ", gltf.accessors:", gltfModel.accessors.size(),
+                    ", gltf.buffers:", gltfModel.buffers.size(),
+                    ", center[0]:", rtcExt->center[0], ", center[1]:", rtcExt->center[1], ", center[2]:", rtcExt->center[2]
+                    );
+            }
+
+            glm::vec3 point;
+            for (auto &buffer : gltfModel.buffers)
+            {
+                auto &bytesData = buffer.cesium.data;
+                pointCount += bytesData.size()/sizeof(glm::vec3);
+                const int32_t byteStride = sizeof(glm::vec3);
+                const glm::vec3& point0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 0 * byteStride);
+                const glm::vec3& point1 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 1 * byteStride);
+
+                point = point0;
+                if (rtcExt) {
+                    point += glm::vec3(rtcExt->center[0], rtcExt->center[1], rtcExt->center[2]);
+                }
+                vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    ", gltf.meshes:", gltfModel.meshes.size(),
+                    ", gltf.accessors:", gltfModel.accessors.size(),
+                    ", gltf.buffers:", gltfModel.buffers.size(),
+                    ", point0 x:", point.x, ", y:", point.y, ", z:", point.z
+                    );
+
+                point = point1;
+                if (rtcExt) {
+                    point += glm::vec3(rtcExt->center[0], rtcExt->center[1], rtcExt->center[2]);
+                }
+                vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    ", gltf.meshes:", gltfModel.meshes.size(),
+                    ", gltf.accessors:", gltfModel.accessors.size(),
+                    ", gltf.buffers:", gltfModel.buffers.size(),
+                    ", point1 x:", point.x, ", y:", point.y, ", z:", point.z
+                    );
+            }
+
+        }
+
+        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            ", gltf.pointCount:", pointCount
+            );
+
+#endif
+
+# if 0
+        // buffers total point-count
+        long long pointCount = 0;
+        for (auto &buffer : mergedModel.buffers)
+        {
+            auto &bytesData = buffer.cesium.data;
+            pointCount += bytesData.size()/sizeof(glm::vec3);
+            const int32_t byteStride = sizeof(glm::vec3);
+            const glm::vec3& point = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 0 * byteStride);
+            const glm::vec3& point1 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 1 * byteStride);
+            // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            //     ", gltf.buffers:", mergedModel.buffers.size(),
+            //     ", gltf.pointCount:", pointCount,
+            //     ", x:", point.x, ", y:", point.y, ", z:", point.z
+            //     );
+            // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            //     ", gltf.buffers:", mergedModel.buffers.size(),
+            //     ", gltf.pointCount:", pointCount,
+            //     ", 1x:", point1.x, ", 1y:", point1.y, ", 1z:", point1.z
+            //     );
+        }
+
+        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            ", gltf.buffers:", mergedModel.buffers.size(),
+            ", gltf.pointCount:", pointCount
+            );
+#endif
+
+#if 0
+        // try failed --- get points from gltf-model accessor
+        if (mergedModel.accessors.size() > 0 ) {
+            const CesiumGltf::Accessor& accessor = mergedModel.accessors.front();
+
+            vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                ", gltfModel.accessors:", mergedModel.accessors.size(),
+                ", gltfModel.accessor0.count:", accessor.count
+                );
+
+        }
+#endif
+
+# if 1
+        // try failed --- get points from gltf-model primitives/meshes/accessor
+        long long pointCount = 0;
+
+        for (auto* tile : renderTiles)
+        {
+            const auto& tileContent = tile->getContent();
+            CesiumGltf::Model gltfModel = tileContent.getRenderContent()->getModel();
+
+            // CHECK(gltf.hasExtension<CesiumGltf::ExtensionCesiumRTC>());
+            // CHECK(gltf.nodes.size() == 1);
+
+            long long positionCount = 0;
+            long long colorCount = 0;
+
+            CesiumGltf::ExtensionCesiumRTC *rtcExt = NULL;
+            if (gltfModel.hasExtension<CesiumGltf::ExtensionCesiumRTC>()) {
+                rtcExt = gltfModel.getExtension<CesiumGltf::ExtensionCesiumRTC>();
+                // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                //     ", gltf.meshes:", gltfModel.meshes.size(),
+                //     ", gltf.accessors:", gltfModel.accessors.size(),
+                //     ", gltf.buffers:", gltfModel.buffers.size(),
+                //     ", center[0]:", rtcExt->center[0], ", center[1]:", rtcExt->center[1], ", center[2]:", rtcExt->center[2]
+                //     );
+            }
+
+            if (gltfModel.meshes.size() > 0 ) {
+                if(gltfModel.meshes.size() != 1) {vsg::error("bad gltfModel.meshes.size(): ", gltfModel.meshes.size());}
+
+                // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                //     ", gltf.meshes:", gltfModel.meshes.size(),
+                //     ", gltf.meshes0.primitives:", gltfModel.meshes[0].primitives.size()
+                //     );
+
+                const CesiumGltf::Mesh& mesh = gltfModel.meshes.front();
+                // CHECK(mesh.primitives.size() == 1);
+                if(mesh.primitives.size() != 1) {vsg::error("bad mesh.primitives.size()", mesh.primitives.size());}
+
+                const CesiumGltf::MeshPrimitive& primitive = mesh.primitives.front();
+                // CHECK(primitive.attributes.size() == 2);
+                if(primitive.attributes.size() != 2) {vsg::error("bad primitive.attributes.size(): ", primitive.attributes.size());}
+                if(primitive.mode != MeshPrimitive::Mode::POINTS) {vsg::error("bad primitive.mode: ", primitive.mode);}
+
+                // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                //     ", gltf.meshes:", gltfModel.meshes.size(),
+                //     ", meshe0.primitives:", mesh.primitives.size(),
+                //     ", primitive.attributes:", primitive.attributes.size()
+                //     );
+
+                const auto attributes = primitive.attributes;
+
+                glm::vec3 position;
+                glm::vec3 color;
+
+                // // Check that position and color attributes are present
+                // checkAttribute<glm::vec3>(gltf, primitive, "POSITION", pointsLength);
+                // checkAttribute<glm::vec3>(gltf, primitive, "COLOR_0", pointsLength);
+
+                {
+                    // Check position attribute more thoroughly
+                    uint32_t positionAccessorId = static_cast<uint32_t>(attributes.at("POSITION"));
+                    Accessor& positionAccessor = gltfModel.accessors[positionAccessorId];
+                    // CHECK(!positionAccessor.normalized);
+                    // if(positionAccessor.normalized) {vsg::error("bad positionAccessor.normalized: ", positionAccessor.normalized);}
+
+                    uint32_t positionBufferViewId = static_cast<uint32_t>(positionAccessor.bufferView);
+                    BufferView& positionBufferView = gltfModel.bufferViews[positionBufferViewId];
+
+                    uint32_t positionBufferId = static_cast<uint32_t>(positionBufferView.buffer);
+                    Buffer& positionBuffer = gltfModel.buffers[positionBufferId];
+
+                    auto &bytesData = positionBuffer.cesium.data;
+                    positionCount = bytesData.size()/sizeof(glm::vec3);
+                    const int32_t byteStride = sizeof(glm::vec3);
+                    const glm::vec3& position0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 0 * byteStride);
+                    const glm::vec3& position1 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 1 * byteStride);
+
+                    position = position0;
+                    if (rtcExt) {
+                        position += glm::vec3(rtcExt->center[0], rtcExt->center[1], rtcExt->center[2]);
+                    }
+                    // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    //     ", gltf.meshes:", gltfModel.meshes.size(),
+                    //     ", gltf.accessors:", gltfModel.accessors.size(),
+                    //     ", gltf.buffers:", gltfModel.buffers.size(),
+                    //     ", gltf.bufferIndex:", positionBufferId,
+                    //     ", positionCount:", positionCount,
+                    //     ", position0 x:", position.x, ", y:", position.y, ", z:", position.z
+                    //     );
+
+                }
+
+                {
+                    // Check color attribute more thoroughly
+                    uint32_t colorAccessorId = static_cast<uint32_t>(attributes.at("COLOR_0"));
+                    Accessor& colorAccessor = gltfModel.accessors[colorAccessorId];
+                    // CHECK(!colorAccessor.normalized);
+                    if(colorAccessor.normalized) {vsg::error("bad colorAccessor.normalized: ", colorAccessor.normalized);}
+
+                    uint32_t colorBufferViewId = static_cast<uint32_t>(colorAccessor.bufferView);
+                    BufferView& colorBufferView = gltfModel.bufferViews[colorBufferViewId];
+
+                    uint32_t colorBufferId = static_cast<uint32_t>(colorBufferView.buffer);
+                    Buffer& colorBuffer = gltfModel.buffers[colorBufferId];
+
+                    auto &bytesData = colorBuffer.cesium.data;
+                    colorCount = bytesData.size()/sizeof(glm::vec3);
+                    const int32_t byteStride = sizeof(glm::vec3);
+                    const glm::vec3& color0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 0 * byteStride);
+                    const glm::vec3& color1 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 1 * byteStride);
+
+                    // color = glm::convertLinearToSRGB(color);
+                    color = glm::pow(color, glm::vec3(1.0 / 2.2));
+                    color *= 255;
+
+                    // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    //     ", gltf.meshes:", gltfModel.meshes.size(),
+                    //     ", gltf.accessors:", gltfModel.accessors.size(),
+                    //     ", gltf.buffers:", gltfModel.buffers.size(),
+                    //     ", gltf.bufferIndex:", colorBufferId,
+                    //     ", colorCount:", colorCount,
+                    //     ", color0 x:", color.x, ", y:", color.y, ", z:", color.z
+                    //     );
+
+                }
+
+                if (positionCount != colorCount) {
+                    vsg::error("mismatch positionCount and colorCount.", " positionCount:", positionCount, ", colorCount:", colorCount);
+                }
+
+                pointCount += positionCount;
+            }
+
+        }
+
+        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            ", gltf.pointCount:", pointCount
+            );
+# endif
+
+    }
+
+    return renderTiles;
+}
+
+RenderContent* TilesetNode::getRenderContent()
+{
+    auto ellipsoidModel = vsg::EllipsoidModel::create();
+
+    RenderContent* renderContent =  new RenderContent();
+    std::vector<Cesium3DTilesSelection::Tile *> renderTiles = std::vector<Cesium3DTilesSelection::Tile *>{};
+
+    if (_viewUpdateResult)
+    {
+        auto beginTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+        // get all render-tiles
+        long long tileCount = 0;
+        for (auto* tile : _viewUpdateResult->tilesToRenderThisFrame)
+        {
+            const auto& tileContent = tile->getContent();
+            if (tileContent.isRenderContent())
+            {
+                tileCount++;
+                renderTiles.push_back(tile);
+            }
+        }
+        // vsg::warn("tileContentRender: ", " - render-tile-count:", tileCount);
+
+# if 1
+        // try failed --- get points from gltf-model primitives/meshes/accessor
+        long long pointCount = 0;
+
+        for (auto* tile : renderTiles)
+        {
+            const auto& tileContent = tile->getContent();
+            CesiumGltf::Model gltfModel = tileContent.getRenderContent()->getModel();
+
+            // CHECK(gltf.hasExtension<CesiumGltf::ExtensionCesiumRTC>());
+            // CHECK(gltf.nodes.size() == 1);
+
+            long long positionCount = 0;
+            long long colorCount = 0;
+
+            CesiumGltf::ExtensionCesiumRTC *rtcExt = NULL;
+            if (gltfModel.hasExtension<CesiumGltf::ExtensionCesiumRTC>()) {
+                rtcExt = gltfModel.getExtension<CesiumGltf::ExtensionCesiumRTC>();
+                // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                //     ", gltf.meshes:", gltfModel.meshes.size(),
+                //     ", gltf.accessors:", gltfModel.accessors.size(),
+                //     ", gltf.buffers:", gltfModel.buffers.size(),
+                //     ", center[0]:", rtcExt->center[0], ", center[1]:", rtcExt->center[1], ", center[2]:", rtcExt->center[2]
+                //     );
+            }
+
+            if (gltfModel.meshes.size() > 0 ) {
+                if(gltfModel.meshes.size() != 1) {vsg::error("bad gltfModel.meshes.size(): ", gltfModel.meshes.size());}
+
+                // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                //     ", gltf.meshes:", gltfModel.meshes.size(),
+                //     ", gltf.meshes0.primitives:", gltfModel.meshes[0].primitives.size()
+                //     );
+
+                const CesiumGltf::Mesh& mesh = gltfModel.meshes.front();
+                // CHECK(mesh.primitives.size() == 1);
+                if(mesh.primitives.size() != 1) {vsg::error("bad mesh.primitives.size()", mesh.primitives.size());}
+
+                const CesiumGltf::MeshPrimitive& primitive = mesh.primitives.front();
+                // CHECK(primitive.attributes.size() == 2);
+                if(primitive.attributes.size() != 2) {vsg::error("bad primitive.attributes.size(): ", primitive.attributes.size());}
+                if(primitive.mode != MeshPrimitive::Mode::POINTS) {vsg::error("bad primitive.mode: ", primitive.mode);}
+
+                // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                //     ", gltf.meshes:", gltfModel.meshes.size(),
+                //     ", meshe0.primitives:", mesh.primitives.size(),
+                //     ", primitive.attributes:", primitive.attributes.size()
+                //     );
+
+                const auto attributes = primitive.attributes;
+
+                glm::vec3 position;
+                glm::vec3 color;
+
+                // // Check that position and color attributes are present
+                // checkAttribute<glm::vec3>(gltf, primitive, "POSITION", pointsLength);
+                // checkAttribute<glm::vec3>(gltf, primitive, "COLOR_0", pointsLength);
+
+                {
+                    // Check position attribute more thoroughly
+                    uint32_t positionAccessorId = static_cast<uint32_t>(attributes.at("POSITION"));
+                    Accessor& positionAccessor = gltfModel.accessors[positionAccessorId];
+                    // CHECK(!positionAccessor.normalized);
+                    if(positionAccessor.normalized) {vsg::error("bad positionAccessor.normalized: ", positionAccessor.normalized);}
+                    if(positionAccessor.type != "VEC3") {vsg::error("bad positionAccessor.type: ", positionAccessor.type);}
+
+
+                    uint32_t positionBufferViewId = static_cast<uint32_t>(positionAccessor.bufferView);
+                    BufferView& positionBufferView = gltfModel.bufferViews[positionBufferViewId];
+
+                    uint32_t positionBufferId = static_cast<uint32_t>(positionBufferView.buffer);
+                    Buffer& positionBuffer = gltfModel.buffers[positionBufferId];
+
+                    auto &bytesData = positionBuffer.cesium.data;
+                    positionCount = bytesData.size()/sizeof(glm::vec3);
+                    const int32_t byteStride = sizeof(glm::vec3);
+                    const glm::vec3& position0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 0 * byteStride);
+                    const glm::vec3& position1 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 1 * byteStride);
+
+                    position = position0;
+                    if (rtcExt) {
+                        position += glm::vec3(rtcExt->center[0], rtcExt->center[1], rtcExt->center[2]);
+                    }
+                    // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    //     ", gltf.meshes:", gltfModel.meshes.size(),
+                    //     ", gltf.accessors:", gltfModel.accessors.size(),
+                    //     ", gltf.buffers:", gltfModel.buffers.size(),
+                    //     ", gltf.bufferIndex:", positionBufferId,
+                    //     ", positionCount:", positionCount,
+                    //     ", position0 x:", position.x, ", y:", position.y, ", z:", position.z
+                    //     );
+
+                    // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    //     ", positionCount:", positionCount,
+                    //     ", position0 x:", position.x, ", y:", position.y, ", z:", position.z
+                    //     );
+
+                    for (auto i = 0; i < positionCount; i++) {
+                        const glm::vec3& position0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + i * byteStride);
+                        position = position0;
+                        if (rtcExt) {
+                            position += glm::vec3(rtcExt->center[0], rtcExt->center[1], rtcExt->center[2]);
+                        }
+
+                        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                            ", positionCount:", positionCount, ", index:", i,
+                            ", position0 x:", position.x, ", y:", position.y, ", z:", position.z
+                            );
+
+                        renderContent->positions.push_back(position);
+                    }
+
+                }
+
+                {
+                    // Check color attribute more thoroughly
+                    uint32_t colorAccessorId = static_cast<uint32_t>(attributes.at("COLOR_0"));
+                    Accessor& colorAccessor = gltfModel.accessors[colorAccessorId];
+                    // CHECK(!colorAccessor.normalized);
+                    if(colorAccessor.normalized) {vsg::error("bad colorAccessor.normalized: ", colorAccessor.normalized);}
+                    if(colorAccessor.type != "VEC3") {vsg::error("bad colorAccessor.type: ", colorAccessor.type);}
+
+                    uint32_t colorBufferViewId = static_cast<uint32_t>(colorAccessor.bufferView);
+                    BufferView& colorBufferView = gltfModel.bufferViews[colorBufferViewId];
+
+                    uint32_t colorBufferId = static_cast<uint32_t>(colorBufferView.buffer);
+                    Buffer& colorBuffer = gltfModel.buffers[colorBufferId];
+
+                    auto &bytesData = colorBuffer.cesium.data;
+                    colorCount = bytesData.size()/sizeof(glm::vec3);
+                    const int32_t byteStride = sizeof(glm::vec3);
+                    const glm::vec3& color0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 0 * byteStride);
+                    const glm::vec3& color1 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + 1 * byteStride);
+
+                    color = color0;
+                    // color = glm::convertLinearToSRGB(color);
+                    color = glm::pow(color, glm::vec3(1.0 / 2.2));
+                    color *= 255;
+
+                    // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    //     ", gltf.meshes:", gltfModel.meshes.size(),
+                    //     ", gltf.accessors:", gltfModel.accessors.size(),
+                    //     ", gltf.buffers:", gltfModel.buffers.size(),
+                    //     ", gltf.bufferIndex:", colorBufferId,
+                    //     ", colorCount:", colorCount,
+                    //     ", color0 r:", color.x, ", g:", color.y, ", b:", color.z
+                    //     );
+
+                    // vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                    //     ", colorCount:", colorCount, ", index:", i,
+                    //     ", color0 r:", color.x, ", g:", color.y, ", b:", color.z
+                    //     );
+
+                    for (auto i = 0; i < colorCount; i++) {
+                        const glm::vec3& color0 = *reinterpret_cast<const glm::vec3*>(bytesData.data() + i * byteStride);
+                        color = color0;
+                        color = glm::pow(color, glm::vec3(1.0 / 2.2));
+                        color *= 255;
+
+                        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+                            ", colorCount:", colorCount, ", index:", i,
+                            ", color0 r:", color.x, ", g:", color.y, ", b:", color.z
+                            );
+
+                        renderContent->colors.push_back(color);
+                    }
+
+                }
+
+                if (positionCount != colorCount) {
+                    vsg::error("mismatch positionCount and colorCount.", " positionCount:", positionCount, ", colorCount:", colorCount);
+                }
+
+                pointCount += positionCount;
+            }
+
+        }
+        auto endTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        long long elaspeTimeMs = endTimeMs - beginTimeMs;
+
+        vsg::warn("tileContentRenderModel: ", " - render-tile-count:", tileCount,
+            ", gltf.pointCount:", pointCount,
+            ", elaspeTimeMs:", elaspeTimeMs
+            );
+# endif
+
+    }
+
+    renderContent->renderTiles = renderTiles;
+    return renderContent;
 }
 
 template<class V>
