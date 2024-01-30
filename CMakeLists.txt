@@ -37,7 +37,11 @@ endif()
 message("Fetching and make-available vsg ...")
 
 set(VSG_MIN_VERSION 1.1.0)
-add_subdirectory(third_party/vsg)  # vsg-dev/VulkanSceneGraph master | tag/1.1.0
+# add_subdirectory(third_party/vsg)  # vsg-dev/VulkanSceneGraph master | tag/1.1.0
+
+set(vsg_DIR C:/Workspace/vsgCs-master/vsg/build/inst/lib/cmake/vsg)
+find_package(vsg REQUIRED)
+
 
 # find_package(vsg) includes vsgMacros
 if (vsg_SOURCE_DIR)
@@ -53,7 +57,7 @@ find_package(vsgXchange)
 message("Fetching and make-available vsgImGui ...")
 
 set(VSGIMGUI_MIN_VERSION 0.1.0)
-add_subdirectory(third_party/vsgImGui)   # vsg-dev/vsgImGui.git tag/v0.1.0 
+add_subdirectory(third_party/vsgImGui)   # vsg-dev/vsgImGui.git tag/v0.1.0
 
 message("Fetching and make-available vsgImGui finished")
 
@@ -63,6 +67,9 @@ option(CESIUM_SPDLOG_HEADER_ONLY "Whether to use the header-only version of spdl
 option(GSL_INSTALL "Generate and install GSL target" ON)
 
 add_subdirectory(third_party/cesium-native)  # timoore/cesium-native 32309b09de1a9e0860e647fa4900c1491d74c85b
+
+# set(cesium-native_DIR C:/Workspace/vsgCs_third_party/cesium-native-timoore/cesium-native/build/inst/lib/cmake/cesium-native)
+# find_package(cesium-native REQUIRED)
 
 message("Fetching and make-available cesium-native finished")
 
