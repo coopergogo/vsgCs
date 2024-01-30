@@ -35,8 +35,8 @@ endif()
 
 message("Fetching and make-available vsg ...")
 
-set(VSG_MIN_VERSION 1.0.6)
-add_subdirectory(third_party/vsg)
+set(VSG_MIN_VERSION 1.0.9)
+add_subdirectory(third_party/vsg) # cmake-fixes-132f3bce
 
 # find_package(vsg) includes vsgMacros
 if (vsg_SOURCE_DIR)
@@ -60,7 +60,8 @@ message("Fetching and make-available cesium-native ...")
 
 # option(CESIUM_SPDLOG_HEADER_ONLY "Whether to use the header-only version of spdlog." OFF)
 option(GSL_INSTALL "Generate and install GSL target" ON)
-add_subdirectory(third_party/cesium-native)
+
+add_subdirectory(third_party/cesium-native) # cmake-fixes-dfcee62c
 
 message("Fetching and make-available cesium-native finished")
 
