@@ -2,7 +2,7 @@
 #define _DESCRIPTOR_DEFS_H 1
 
 #define VIEW_DESCRIPTOR_SET 0
-#define TILESET_DESCRIPTOR_SET 1
+#define WORLD_DESCRIPTOR_SET 1
 #define TILE_DESCRIPTOR_SET 2
 #define PRIMITIVE_DESCRIPTOR_SET 3
 
@@ -24,7 +24,8 @@ layout(set = TILE_DESCRIPTOR_SET, binding = 0) uniform TileParams
 {
   float geometricError;
   float maxPointSize;
-  // 8 bytes padding
+  float fadeValue;
+  float fadeOut;                // using a float as a bool
   OverlayParamBlock params[4];
 } tileParams;
 

@@ -26,8 +26,6 @@ SOFTWARE.
 
 #include "accessor_traits.h"
 #include "accessorUtils.h"
-#include "DescriptorSetConfigurator.h"
-#include "MultisetPipelineConfigurator.h"
 #include "LoadGltfResult.h"
 #include "pbr.h"
 #include "Styling.h"
@@ -165,14 +163,8 @@ namespace
     }
 }
 
-inline VkDescriptorSetLayoutBinding getVk(const vsg::UniformBinding& binding)
-{
-    return VkDescriptorSetLayoutBinding{binding.binding, binding.descriptorType, binding.descriptorCount,
-                                        binding.stageFlags, nullptr};
-}
-
 CreateModelOptions::CreateModelOptions(bool in_renderOverlays, const vsg::ref_ptr<Styling>& in_styling)
-    : renderOverlays(in_renderOverlays), styling(in_styling)
+    : renderOverlays(in_renderOverlays), lodFade(true), styling(in_styling)
 {
 }
 
@@ -586,12 +578,27 @@ ModelBuilder::loadPrimitive(const CesiumGltf::MeshPrimitive* primitive,
     }
     auto csMaterial = loadMaterial(primitive->material, topology);
     auto descConf = csMaterial->descriptorConfig;
-    auto pipelineConf = MultisetPipelineConfigurator::create(descConf->shaderSet);
-    pipelineConf->defines() = descConf->defines;
-    pipelineConf->inputAssemblyState->topology = topology;
+    auto pipelineConf = vsg::GraphicsPipelineConfigurator::create(descConf->shaderSet);
+    pipelineConf->descriptorConfigurator = descConf;
+    // The new way of setting pipeline state (from vsgXchange)
+    // set the GraphicsPipelineStates to the required values.
+    struct SetPipelineStates : public vsg::Visitor
+    {
+        VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        bool blending = false;
+        bool two_sided = false;
+
+        SetPipelineStates(VkPrimitiveTopology in_topology, bool in_blending, bool in_two_sided) : topology(in_topology), blending(in_blending), two_sided(in_two_sided) {}
+
+        void apply(vsg::Object& object) { object.traverse(*this); }
+        void apply(vsg::RasterizationState& rs) { if (two_sided) rs.cullMode = VK_CULL_MODE_NONE; }
+        void apply(vsg::InputAssemblyState& ias) { ias.topology = topology; }
+        void apply(vsg::ColorBlendState& cbs) { cbs.configureAttachments(blending); }
+    } sps(topology, descConf->blending, descConf->two_sided);
+    pipelineConf->accept(sps);
     if (topology == VK_PRIMITIVE_TOPOLOGY_POINT_LIST)
     {
-        pipelineConf->defines().insert("VSGCS_SIZE_TO_ERROR");
+        pipelineConf->shaderHints->defines.insert("VSGCS_SIZE_TO_ERROR");
     }
     bool generateTangents = csMaterial->texInfo.count("normalMap") != 0
         && primitive->attributes.count("TANGENT") == 0;
@@ -618,11 +625,11 @@ ModelBuilder::loadPrimitive(const CesiumGltf::MeshPrimitive* primitive,
         pipelineConf->assignArray(vertexArrays, "vsg_Normal", VK_VERTEX_INPUT_RATE_VERTEX,
                             ref_ptr_cast<vsg::vec3Array>(createData(_model, normalAccessor, expansionIndices)));
     }
-    else if (!isTriangleTopology(pipelineConf->inputAssemblyState->topology)) // Can not make normals
+    else if (!isTriangleTopology(topology)) // Can not make normals
     {
-        if (pipelineConf->inputAssemblyState->topology == VK_PRIMITIVE_TOPOLOGY_POINT_LIST)
+        if (topology == VK_PRIMITIVE_TOPOLOGY_POINT_LIST)
         {
-            pipelineConf->defines().insert("VSGCS_BILLBOARD_NORMAL");
+            pipelineConf->shaderHints->defines.insert("VSGCS_BILLBOARD_NORMAL");
         }
         auto normal = vsg::vec3Value::create(vsg::vec3(0.0f, 1.0f, 0.0f));
         pipelineConf->assignArray(vertexArrays, "vsg_Normal", VK_VERTEX_INPUT_RATE_INSTANCE, normal);
@@ -631,8 +638,8 @@ ModelBuilder::loadPrimitive(const CesiumGltf::MeshPrimitive* primitive,
     {
         auto posArray = ref_ptr_cast<vsg::vec3Array>(positions);
         auto normals = vsg::vec3Array::create(posArray->size());
-        generateNormals(posArray, normals, pipelineConf->inputAssemblyState->topology);
-        pipelineConf->defines().insert("VSGCS_FLAT_SHADING");
+        generateNormals(posArray, normals, topology);
+        pipelineConf->shaderHints->defines.insert("VSGCS_FLAT_SHADING");
         pipelineConf->assignArray(vertexArrays, "vsg_Normal", VK_VERTEX_INPUT_RATE_VERTEX, normals);
     }
 
@@ -727,49 +734,24 @@ ModelBuilder::loadPrimitive(const CesiumGltf::MeshPrimitive* primitive,
         drawCommand = vd;
     }
     drawCommand->setValue("name", name);
-    if (descConf->blending)
-    {
-        // figure out what this means someday...
-        // These are parameters for blending into the first color attachment in the render
-        // pass. While this set of parameters implements bog-standard alpha blending, should they be
-        // buried at this low level?
-        //
-        // Note that this will work for any "compatible" render pass too.
-        pipelineConf->colorBlendState->attachments = vsg::ColorBlendState::ColorBlendAttachments{
-            {true, VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_ADD,
-             VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA, VK_BLEND_OP_SUBTRACT,
-             VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT}};
-        _genv->sharedObjects->share(pipelineConf->colorBlendState);
-    }
-    if (descConf->two_sided)
-    {
-        pipelineConf->rasterizationState->cullMode = VK_CULL_MODE_NONE;
-    }
-    if (descConf->descriptorSet)
-    {
-        pipelineConf->descriptorSetLayout = descConf->descriptorSet->setLayout;
-        pipelineConf->descriptorBindings = descConf->descriptorBindings;
-    }
     pipelineConf->init();
     _genv->sharedObjects->share(pipelineConf->bindGraphicsPipeline);
 
     auto stateGroup = vsg::StateGroup::create();
     stateGroup->add(pipelineConf->bindGraphicsPipeline);
 
-    if (descConf->descriptorSet)
+    if (auto descSet = getDescriptorSet(descConf, pbr::PRIMITIVE_DESCRIPTOR_SET); descSet)
     {
         auto bindDescriptorSet
-            = vsg::BindDescriptorSet::create(VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineConf->layout, pbr::PRIMITIVE_DESCRIPTOR_SET,
-                                             descConf->descriptorSet);
+            = vsg::BindDescriptorSet::create(VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineConf->layout,
+                                             pbr::PRIMITIVE_DESCRIPTOR_SET,
+                                             descSet);
+        _genv->sharedObjects->share(bindDescriptorSet);
         stateGroup->add(bindDescriptorSet);
     }
-
-    auto bindViewDescriptorSets = vsg::BindViewDescriptorSets::create(VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineConf->layout, pbr::VIEW_DESCRIPTOR_SET);
-    stateGroup->add(bindViewDescriptorSets);
-
-
     // assign any custom ArrayState that may be required.
-    stateGroup->prototypeArrayState = pipelineConf->shaderSet->getSuitableArrayState(pipelineConf->defines());
+    stateGroup->prototypeArrayState
+        = pipelineConf->shaderSet->getSuitableArrayState(pipelineConf->shaderHints->defines);
 
     stateGroup->addChild(drawCommand);
 
@@ -796,7 +778,8 @@ vsg::ref_ptr<ModelBuilder::CsMaterial>
 ModelBuilder::loadMaterial(const CesiumGltf::Material* material, VkPrimitiveTopology topology)
 {
     auto csMat = CsMaterial::create();
-    csMat->descriptorConfig = DescriptorSetConfigurator::create();
+    csMat->descriptorConfig
+        = vsg::DescriptorConfigurator::create(_genv->shaderFactory->getShaderSet(topology));
     // XXX Cesium Unreal always enables two-sided, but it should come from the material...
     csMat->descriptorConfig->two_sided = true;
     csMat->descriptorConfig->defines.insert("VSG_TWO_SIDED_LIGHTING");
@@ -804,14 +787,16 @@ ModelBuilder::loadMaterial(const CesiumGltf::Material* material, VkPrimitiveTopo
     {
         csMat->descriptorConfig->defines.insert("VSGCS_OVERLAY_MAPS");
     }
+    if (_options.lodFade)
+    {
+        csMat->descriptorConfig->defines.insert("VSGCS_LOD_FADE");
+    }
     vsg::PbrMaterial pbr;
-
     if (material->alphaMode == CesiumGltf::Material::AlphaMode::BLEND)
     {
         csMat->descriptorConfig->blending = true;
         pbr.alphaMaskCutoff = 0.0f;
     }
-    csMat->descriptorConfig->shaderSet = _genv->shaderFactory->getShaderSet(topology);
     if (material->pbrMetallicRoughness)
     {
         auto const& cesiumPbr = material->pbrMetallicRoughness.value();
@@ -837,11 +822,7 @@ ModelBuilder::loadMaterial(const CesiumGltf::Material* material, VkPrimitiveTopo
     loadMaterialTexture(csMat, "normalMap", material->normalTexture, false);
     loadMaterialTexture(csMat, "aoMap", material->occlusionTexture, false);
     loadMaterialTexture(csMat, "emissiveMap", material->emissiveTexture, true);
-    csMat->descriptorConfig->assignUniform("material", vsg::PbrMaterialValue::create(pbr));
-    auto descriptorSetLayout
-        = vsg::DescriptorSetLayout::create(csMat->descriptorConfig->descriptorBindings);
-    csMat->descriptorConfig->descriptorSet
-        = vsg::DescriptorSet::create(descriptorSetLayout, csMat->descriptorConfig->descriptors);
+    csMat->descriptorConfig->assignDescriptor("material", vsg::PbrMaterialValue::create(pbr));
     return csMat;
 }
 
@@ -855,10 +836,10 @@ ModelBuilder::loadMaterial(int i, VkPrimitiveTopology topology)
         if (!_baseMaterial[topoIndex])
         {
             _baseMaterial[topoIndex] = CsMaterial::create();
-            _baseMaterial[topoIndex]->descriptorConfig = DescriptorSetConfigurator::create();
+            _baseMaterial[topoIndex]->descriptorConfig = vsg::DescriptorConfigurator::create();
             _baseMaterial[topoIndex]->descriptorConfig->shaderSet = _genv->shaderFactory->getShaderSet(topology);
             vsg::PbrMaterial pbr;
-            _baseMaterial[topoIndex]->descriptorConfig->assignUniform("material",
+            _baseMaterial[topoIndex]->descriptorConfig->assignDescriptor("material",
                                                                          vsg::PbrMaterialValue::create(pbr));
         }
         return _baseMaterial[topoIndex];

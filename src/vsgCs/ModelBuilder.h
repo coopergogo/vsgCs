@@ -24,13 +24,13 @@ SOFTWARE.
 
 #pragma once
 
-#include "DescriptorSetConfigurator.h"
 #include "Export.h"
 #include "GraphicsEnvironment.h"
 #include "runtimeSupport.h"
 
 #include <vsg/core/Inherit.h>
 #include <vsg/io/Logger.h>
+#include <vsg/utils/GraphicsPipelineConfigurator.h>
 
 namespace vsgCs
 {
@@ -88,6 +88,7 @@ namespace vsgCs
         CreateModelOptions(bool in_renderOverlays = false, const vsg::ref_ptr<Styling>& styling = {});
         ~CreateModelOptions();
         bool renderOverlays;
+        bool lodFade;
         vsg::ref_ptr<Styling> styling;
     };
 
@@ -152,7 +153,7 @@ namespace vsgCs
         // to specific texture coordinate attributes.
         struct CsMaterial : public vsg::Inherit<vsg::Object, CsMaterial>
         {
-            vsg::ref_ptr<DescriptorSetConfigurator> descriptorConfig;
+            vsg::ref_ptr<vsg::DescriptorConfigurator> descriptorConfig;
             std::map<std::string, TexInfo> texInfo;
         };
         std::vector<std::array<vsg::ref_ptr<CsMaterial>, 2>> _csMaterials;

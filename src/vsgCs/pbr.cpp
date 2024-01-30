@@ -33,15 +33,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsgCs::pbr
 {
     vsg::ref_ptr<vsg::Data> makeTileData(float geometricError, float maxPointSize,
-                                         const gsl::span<OverlayParams> overlayUniformMem)
+                                         const gsl::span<OverlayParams> overlayUniformMem,
+                                         float fadeValue, bool fadeOut)
     {
+        // All this hair with memcpy is to avoid using reinterpret_cast with a struct, apparently
+        // undefined behavior in C++.
         vsg::vec4 tileScratch;
         tileScratch[0] = geometricError;
         tileScratch[1] = maxPointSize;
+        tileScratch[2] = fadeValue;
+        tileScratch[3] = fadeOut ? 1.0f : 0.0f;
         auto result = vsg::ubyteArray::create(sizeof(vsg::vec4) + overlayUniformMem.size_bytes());
         memcpy(&(*result)[0], &tileScratch, sizeof(tileScratch)); // NOLINT
         memcpy(&(*result)[sizeof(tileScratch)], overlayUniformMem.data(), overlayUniformMem.size_bytes());
         return result;
+    }
+
+    std::pair<float, bool> getFadeValue(const vsg::ref_ptr<vsg::Data>& tileData)
+    {
+        auto tileBufData = ref_ptr_cast<vsg::ubyteArray>(tileData);
+        float fadeValue;
+        memcpy(&fadeValue, tileBufData->data() + sizeof(float) * 2, sizeof(float));
+        float fadeOut;
+        memcpy(&fadeOut, tileBufData->data() + sizeof(float) * 3, sizeof(float));
+        return std::make_pair(fadeValue, fadeOut != 0.0f);
+    }
+
+    void setFadeValue(const vsg::ref_ptr<vsg::Data>& tileData, float fadeValue, bool fadeOut)
+    {
+        auto tileBufData = ref_ptr_cast<vsg::ubyteArray>(tileData);
+        float floatFadeOut = fadeOut ? 1.0f : 0.0f;
+        memcpy(tileBufData->data() + sizeof(float) * 2, &fadeValue, sizeof(float));
+        memcpy(tileBufData->data() + sizeof(float) * 3, &floatFadeOut, sizeof(float));
     }
 
     vsg::ref_ptr<vsg::ShaderSet> makeShaderSetAux(vsg::ref_ptr<vsg::ShaderSet> shaderSet)
@@ -55,29 +78,36 @@ namespace vsgCs::pbr
         shaderSet->addAttributeBinding("vsg_TexCoord1", "", 5, VK_FORMAT_R32G32_SFLOAT, vsg::vec2Array::create(1));
         shaderSet->addAttributeBinding("vsg_TexCoord2", "", 6, VK_FORMAT_R32G32_SFLOAT, vsg::vec2Array::create(1));
         shaderSet->addAttributeBinding("vsg_TexCoord3", "", 7, VK_FORMAT_R32G32_SFLOAT, vsg::vec2Array::create(1));
-        shaderSet->addUniformBinding("displacementMap", "VSG_DISPLACEMENT_MAP", PRIMITIVE_DESCRIPTOR_SET, 6,
+        shaderSet->addDescriptorBinding("displacementMap", "VSG_DISPLACEMENT_MAP", PRIMITIVE_DESCRIPTOR_SET, 6,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_VERTEX_BIT, vsg::vec4Array2D::create(1, 1));
-        shaderSet->addUniformBinding("diffuseMap", "VSG_DIFFUSE_MAP", PRIMITIVE_DESCRIPTOR_SET, 0,
+        shaderSet->addDescriptorBinding("diffuseMap", "VSG_DIFFUSE_MAP", PRIMITIVE_DESCRIPTOR_SET, 0,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
-        shaderSet->addUniformBinding("mrMap", "VSG_METALLROUGHNESS_MAP", PRIMITIVE_DESCRIPTOR_SET, 1,
+        shaderSet->addDescriptorBinding("mrMap", "VSG_METALLROUGHNESS_MAP", PRIMITIVE_DESCRIPTOR_SET, 1,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
-        shaderSet->addUniformBinding("normalMap", "VSG_NORMAL_MAP", PRIMITIVE_DESCRIPTOR_SET, 2,
+        shaderSet->addDescriptorBinding("normalMap", "VSG_NORMAL_MAP", PRIMITIVE_DESCRIPTOR_SET, 2,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec3Array2D::create(1, 1));
-        shaderSet->addUniformBinding("aoMap", "VSG_LIGHTMAP_MAP", PRIMITIVE_DESCRIPTOR_SET, 3,
+        shaderSet->addDescriptorBinding("aoMap", "VSG_LIGHTMAP_MAP", PRIMITIVE_DESCRIPTOR_SET, 3,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
-        shaderSet->addUniformBinding("emissiveMap", "VSG_EMISSIVE_MAP", PRIMITIVE_DESCRIPTOR_SET, 4,
+        shaderSet->addDescriptorBinding("emissiveMap", "VSG_EMISSIVE_MAP", PRIMITIVE_DESCRIPTOR_SET, 4,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
-        shaderSet->addUniformBinding("specularMap", "VSG_SPECULAR_MAP", PRIMITIVE_DESCRIPTOR_SET, 5,
+        shaderSet->addDescriptorBinding("specularMap", "VSG_SPECULAR_MAP", PRIMITIVE_DESCRIPTOR_SET, 5,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
-        shaderSet->addUniformBinding("material", "", PRIMITIVE_DESCRIPTOR_SET, 10,
+        shaderSet->addDescriptorBinding("material", "", PRIMITIVE_DESCRIPTOR_SET, 10,
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::PbrMaterialValue::create());
-        shaderSet->addUniformBinding("lightData", "", VIEW_DESCRIPTOR_SET, 0,
+        shaderSet->addDescriptorBinding("lightData", "", VIEW_DESCRIPTOR_SET, 0,
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array::create(64));
-        shaderSet->addUniformBinding("viewData", "", VIEW_DESCRIPTOR_SET, 1,
+        shaderSet->addDescriptorBinding("viewData", "", VIEW_DESCRIPTOR_SET, 1,
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 ,VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, vsg::ubyteArray::create(sizeof(vsg::vec4)));
-        shaderSet->addUniformBinding("tileParams", "", TILE_DESCRIPTOR_SET, 0,
+        shaderSet->addDescriptorBinding("shadowMaps", "", VIEW_DESCRIPTOR_SET, 2,
+                                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                                        VK_SHADER_STAGE_FRAGMENT_BIT, vsg::floatArray3D::create(1, 1, 1, vsg::Data::Properties{VK_FORMAT_R32_SFLOAT}));
+        // XXX Want a VSGCS_LOD_FADE define here, but that to messes up the descriptor defaulting mechanism.
+        shaderSet->addDescriptorBinding("blueNoise", "", WORLD_DESCRIPTOR_SET, 0,
+                                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                                     VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
+        shaderSet->addDescriptorBinding("tileParams", "", TILE_DESCRIPTOR_SET, 0,
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array::create(1 + sizeof(OverlayParams)));
-        shaderSet->addUniformBinding("overlayTextures", "", TILE_DESCRIPTOR_SET, 1,
+        shaderSet->addDescriptorBinding("overlayTextures", "", TILE_DESCRIPTOR_SET, 1,
                                      VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, maxOverlays, VK_SHADER_STAGE_FRAGMENT_BIT, {});
         // additional defines
         shaderSet->optionalDefines = {"VSG_GREYSACLE_DIFFUSE_MAP", "VSG_TWO_SIDED_LIGHTING", "VSG_WORKFLOW_SPECGLOSS"};
