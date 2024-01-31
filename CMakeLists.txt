@@ -35,7 +35,7 @@ endif()
 
 message("Fetching and make-available vsg ...")
 
-set(VSG_MIN_VERSION 1.0.6)
+set(VSG_MIN_VERSION 1.0.9)
 add_subdirectory(third_party/vsg)
 
 # find_package(vsg) includes vsgMacros
@@ -60,6 +60,7 @@ message("Fetching and make-available cesium-native ...")
 
 # option(CESIUM_SPDLOG_HEADER_ONLY "Whether to use the header-only version of spdlog." OFF)
 option(GSL_INSTALL "Generate and install GSL target" ON)
+
 add_subdirectory(third_party/cesium-native)
 
 message("Fetching and make-available cesium-native finished")
