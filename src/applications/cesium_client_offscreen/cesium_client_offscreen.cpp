@@ -26,6 +26,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <stdexcept>
 #include <thread>
 
+#include "vsgCs/TilesetNode.h"
+#include "vsgCs/CsOverlay.h"
+#include "vsgCs/OpThreadTaskProcessor.h"
+#include "vsgCs/RuntimeEnvironment.h"
+
 bool supportsBlit(vsg::ref_ptr<vsg::Device> device, VkFormat format)
 {
     auto physicalDevice = device->getPhysicalDevice();
@@ -446,6 +451,74 @@ std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCame
     return std::tie(camera, perspective);
 }
 
+std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCameraForScene(
+    vsg::Node* scenegraph, vsg::ref_ptr<vsg::EllipsoidModel> &ellipsoidModel, const VkExtent2D& extent)
+{
+    // // compute the bounds of the scene graph to help position camera
+    // vsg::ComputeBounds computeBounds;
+    // scenegraph->accept(computeBounds);
+    // vsg::dvec3 centre = (computeBounds.bounds.min + computeBounds.bounds.max) * 0.5;
+    // double radius = vsg::length(computeBounds.bounds.max - computeBounds.bounds.min) * 0.6;
+    // double nearFarRatio = 0.001;
+
+    // root_tile for chunk-tileset-10006-8-112-86-2/tileset.json
+    CesiumGeospatial::BoundingRegion &boundingRegion = CesiumGeospatial::BoundingRegion(
+        CesiumGeospatial::GlobeRectangle(
+            -1.3852369180699862, 0.7642763493615176,
+            -1.3852278627153154, 0.7642829077772885
+        ),
+        115.82851939679875,
+        124.06955259992377
+    );
+    Cesium3DTilesSelection::BoundingVolume &boundingVolume = Cesium3DTilesSelection::BoundingVolume(boundingRegion);
+
+    auto cartoCenter = boundingRegion.getRectangle().computeCenter();
+    // The geographic coordinates specify a normal to the ellipsoid. How convenient!
+    auto normal = CesiumGeospatial::Ellipsoid::WGS84.geodeticSurfaceNormal(cartoCenter);
+    auto position = CesiumGeospatial::Ellipsoid::WGS84.cartographicToCartesian(cartoCenter);
+    auto vNormal = vsgCs::glm2vsg(normal);
+    auto vPosition = vsgCs::glm2vsg(position);
+    auto geoCenter = vsgCs::glm2vsg(Cesium3DTilesSelection::getBoundingVolumeCenter(boundingVolume));
+
+    vsg::dvec3 centre = vPosition;
+    double radius = vsg::length(vPosition - geoCenter);
+    double nearFarRatio = 0.000001;
+
+    // set up the camera
+    double distance = vsg::length(vPosition - geoCenter) * 3.0;
+
+    vsg::dvec3 eye = vPosition +  vNormal * distance;
+    vsg::dvec3 direction = -vNormal;
+
+    // Try to align up with North
+    auto side = vsg::cross(vsg::dvec3(0.0, 0.0, 1.0), direction);
+    side = vsg::normalize(side);
+    vsg::dvec3 up = vsg::cross(direction, side);
+
+    centre = geoCenter;
+    std::cout << "init2 eye:" << eye << ", centre:" << centre << ", up:" << up << std::endl;
+
+    auto lookAt = vsg::LookAt::create(eye, centre, up);
+
+    double horizonMountainHeight = 0.0;
+    // auto perspective = vsg::EllipsoidPerspective::create(
+    //     lookAt,
+    //     ellipsoidModel,
+    //     30.0,
+    //     static_cast<double>(extent.width) / static_cast<double>(extent.height),
+    //     nearFarRatio,
+    //     horizonMountainHeight);
+
+    auto perspective = vsg::Perspective::create(
+        30.0,
+        static_cast<double>(extent.width) / static_cast<double>(extent.height),
+        nearFarRatio,
+        horizonMountainHeight);
+
+    auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(extent));
+    return std::tie(camera, perspective);
+}
+
 void replaceChild(vsg::Group* group, vsg::ref_ptr<vsg::Node> previous, vsg::ref_ptr<vsg::Node> replacement)
 {
     for (auto& child : group->children)
@@ -560,6 +633,9 @@ int main(int argc, char** argv)
     auto captureFilename = arguments.value<vsg::Path>("screenshot.vsgt", {"--capture-file", "-f"});
     bool msaa = arguments.read("--msaa");
 
+    // tileset
+    auto tilesetUrl = arguments.value(std::string(), "--tileset-url");
+
     if (arguments.errors()) return arguments.writeErrorMessages(std::cerr);
 
     // if we are multisampling then to enable copying of the depth buffer we have to
@@ -584,6 +660,8 @@ int main(int argc, char** argv)
     options->add(vsgXchange::all::create());
 #endif
 
+
+#if 0
     // read any vsg files
     for (int i = 1; i < argc; ++i)
     {
@@ -597,6 +675,33 @@ int main(int argc, char** argv)
         }
     }
 
+#endif
+
+    // create the viewer and assign window(s) to it
+    auto viewer = vsg::Viewer::create();
+    // auto window = vsg::Window::create(windowTraits);
+    // if (!window)
+    // {
+    //     std::cout << "Could not create window." << std::endl;
+    //     return 1;
+    // }
+
+    // add window and environment
+    auto environment = vsgCs::RuntimeEnvironment::get();
+    auto window = environment->openWindow(arguments, "cesium_client_offscreen", windowTraits);
+
+    viewer->addWindow(window);
+    environment->setViewer(viewer);
+
+    auto vsg_scene = vsg::Group::create();
+
+    auto ambientLight = vsg::AmbientLight::create();
+    ambientLight->name = "ambient";
+    ambientLight->color.set(1.0, 1.0, 1.0);
+    ambientLight->intensity = 0.2;
+    vsg_scene->addChild(ambientLight);
+
+#if 0
     // assign the vsg_scene from the loaded nodes
     vsg::ref_ptr<vsg::Node> vsg_scene;
     if (vsgNodes.size() > 1)
@@ -619,24 +724,38 @@ int main(int argc, char** argv)
         std::cout << "No valid model files specified." << std::endl;
         return 1;
     }
+#endif
+
+    vsgCs::startup();
+    vsgCs::TilesetSource source;
+    if (!tilesetUrl.empty())
+    {
+        source.url = tilesetUrl;
+    }
+    else
+    {
+        std::cout << "No tile-url specified." << std::endl;
+        return 1;
+    }
+
+    Cesium3DTilesSelection::TilesetOptions tileOptions;
+    tileOptions.enableOcclusionCulling = false;
+    tileOptions.forbidHoles = true;
+    auto tilesetNode = vsgCs::TilesetNode::create(environment->features, source, tileOptions, environment->options);
+    auto ellipsoidModel = vsg::EllipsoidModel::create();
+    tilesetNode->setObject("EllipsoidModel", ellipsoidModel);
+
+
+    vsg_scene->addChild(tilesetNode);
+
 
     // Transform for rotation animation
     auto transform = vsg::MatrixTransform::create();
     transform->addChild(vsg_scene);
     vsg_scene = transform;
 
-    // create the viewer and assign window(s) to it
-    auto viewer = vsg::Viewer::create();
-    auto window = vsg::Window::create(windowTraits);
-    if (!window)
-    {
-        std::cout << "Could not create window." << std::endl;
-        return 1;
-    }
 
-    viewer->addWindow(window);
-
-    auto [displayCamera, displayPerspective] = createCameraForScene(vsg_scene, window->extent2D());
+    auto [displayCamera, displayPerspective] = createCameraForScene(vsg_scene, ellipsoidModel, window->extent2D());
     auto displayRenderGraph = vsg::createRenderGraphForView(window, displayCamera, vsg_scene);
 
     auto device = window->getOrCreateDevice();
@@ -727,6 +846,9 @@ int main(int argc, char** argv)
 
     offscreenSwitch->setAllChildren(offscreenEnabled);
 
+    // Initialize viewer with tilesets
+    tilesetNode->initialize(viewer);
+
     // rendering main loop
     while (viewer->advanceToNextFrame())
     {
@@ -779,6 +901,9 @@ int main(int argc, char** argv)
             saveImage(captureFilename, viewer, device, captureImage, options);
         }
     }
+
+    tilesetNode->shutdown();
+    vsgCs::shutdown();
 
     // clean up done automatically thanks to ref_ptr<>
     return 0;
