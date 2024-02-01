@@ -9,4 +9,4 @@
 	url = https://github.com/vsg-dev/vsgImGui.git
 [submodule "third_party/vsg"]
 	path = third_party/vsg
-	url = https://github.com/vsg-dev/VulkanSceneGraph.git
+	url = https://github.com/coopergogo/VulkanSceneGraph.git
