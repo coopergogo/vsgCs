@@ -1,4 +1,5 @@
 add_subdirectory(csclient)
 add_subdirectory(cesium_client)
+add_subdirectory(cesium_client_offscreen)
 add_subdirectory(worldviewer)
 add_subdirectory(vsgoffscreenshot)
