@@ -757,12 +757,26 @@ int main(int argc, char** argv)
 
     auto [displayCamera, displayPerspective] = createCameraForScene(vsg_scene, ellipsoidModel, window->extent2D());
     auto displayRenderGraph = vsg::createRenderGraphForView(window, displayCamera, vsg_scene);
-
-    auto device = window->getOrCreateDevice();
+    displayRenderGraph->setClearValues(
+        VkClearColorValue{{0.02899f, 0.02899f, 0.13321f, 0.0f}},
+        VkClearDepthStencilValue{0.0f, 0});
 
     // add close handler to respond to the close window button and pressing escape
     viewer->addEventHandler(vsg::CloseHandler::create(viewer));
-    viewer->addEventHandler(vsg::Trackball::create(displayCamera));
+    // viewer->addEventHandler(vsg::Trackball::create(displayCamera));
+
+    auto &_trackball = vsg::Trackball::create(displayCamera, ellipsoidModel);
+    {
+        // osgEarthStyleMouseButtons
+        _trackball->panButtonMask = vsg::BUTTON_MASK_1;
+        _trackball->rotateButtonMask = vsg::BUTTON_MASK_2;
+        _trackball->zoomButtonMask = vsg::BUTTON_MASK_3;
+    }
+    viewer->addEventHandler(_trackball);
+
+
+    // for offscreen
+    auto device = window->getOrCreateDevice();
 
     auto offscreenCommandGraph = vsg::CommandGraph::create(window);
     offscreenCommandGraph->submitOrder = -1; // render before the displayCommandGraph
@@ -844,10 +858,10 @@ int main(int argc, char** argv)
 
     viewer->compile();
 
-    offscreenSwitch->setAllChildren(offscreenEnabled);
-
     // Initialize viewer with tilesets
     tilesetNode->initialize(viewer);
+
+    offscreenSwitch->setAllChildren(offscreenEnabled);
 
     // rendering main loop
     while (viewer->advanceToNextFrame())
@@ -875,6 +889,7 @@ int main(int argc, char** argv)
                 offscreenRenderGraph->resized();
                 vsg::info("offscreen render resized to: ", offscreenExtent.width, "x", offscreenExtent.height);
             }
+            vsg::warn("hander - sync extent");
         }
         else if (screenshotHandler->do_image_capture && !offscreenEnabled)
         {
@@ -885,7 +900,10 @@ int main(int argc, char** argv)
 
             offscreenEnabled = true;
             offscreenSwitch->setAllChildren(offscreenEnabled);
+            vsg::warn("hander - image capture prepare");
         }
+
+        environment->update();
 
         viewer->update();
         viewer->recordAndSubmit();
@@ -893,12 +911,14 @@ int main(int argc, char** argv)
 
         if (screenshotHandler->do_image_capture && offscreenEnabled)
         {
+            vsg::warn("hander - image capture processing");
             // offscreen image was rendered to framebuffer. Disable offscreen
             // rendering and save the capturedImage out to a file.
             screenshotHandler->do_image_capture = false;
             offscreenEnabled = false;
             offscreenSwitch->setAllChildren(offscreenEnabled);
             saveImage(captureFilename, viewer, device, captureImage, options);
+            vsg::warn("hander - image capture finished");
         }
     }
 
