@@ -775,6 +775,8 @@ int main(int argc, char** argv)
     viewer->addEventHandler(_trackball);
 
 
+    // viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
+
     // for offscreen
     auto device = window->getOrCreateDevice();
 
