@@ -163,14 +163,8 @@ namespace
     }
 }
 
-inline VkDescriptorSetLayoutBinding getVk(const vsg::DescriptorBinding& binding)
-{
-    return VkDescriptorSetLayoutBinding{binding.binding, binding.descriptorType, binding.descriptorCount,
-                                        binding.stageFlags, nullptr};
-}
-
 CreateModelOptions::CreateModelOptions(bool in_renderOverlays, const vsg::ref_ptr<Styling>& in_styling)
-    : renderOverlays(in_renderOverlays), styling(in_styling)
+    : renderOverlays(in_renderOverlays), lodFade(true), styling(in_styling)
 {
 }
 
@@ -752,6 +746,7 @@ ModelBuilder::loadPrimitive(const CesiumGltf::MeshPrimitive* primitive,
             = vsg::BindDescriptorSet::create(VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineConf->layout,
                                              pbr::PRIMITIVE_DESCRIPTOR_SET,
                                              descSet);
+        _genv->sharedObjects->share(bindDescriptorSet);
         stateGroup->add(bindDescriptorSet);
     }
     // assign any custom ArrayState that may be required.
@@ -792,6 +787,10 @@ ModelBuilder::loadMaterial(const CesiumGltf::Material* material, VkPrimitiveTopo
     {
         csMat->descriptorConfig->defines.insert("VSGCS_OVERLAY_MAPS");
     }
+    if (_options.lodFade)
+    {
+        csMat->descriptorConfig->defines.insert("VSGCS_LOD_FADE");
+    }
     vsg::PbrMaterial pbr;
     if (material->alphaMode == CesiumGltf::Material::AlphaMode::BLEND)
     {
@@ -823,7 +822,7 @@ ModelBuilder::loadMaterial(const CesiumGltf::Material* material, VkPrimitiveTopo
     loadMaterialTexture(csMat, "normalMap", material->normalTexture, false);
     loadMaterialTexture(csMat, "aoMap", material->occlusionTexture, false);
     loadMaterialTexture(csMat, "emissiveMap", material->emissiveTexture, true);
-    csMat->descriptorConfig->assignUniform("material", vsg::PbrMaterialValue::create(pbr));
+    csMat->descriptorConfig->assignDescriptor("material", vsg::PbrMaterialValue::create(pbr));
     return csMat;
 }
 
@@ -840,7 +839,7 @@ ModelBuilder::loadMaterial(int i, VkPrimitiveTopology topology)
             _baseMaterial[topoIndex]->descriptorConfig = vsg::DescriptorConfigurator::create();
             _baseMaterial[topoIndex]->descriptorConfig->shaderSet = _genv->shaderFactory->getShaderSet(topology);
             vsg::PbrMaterial pbr;
-            _baseMaterial[topoIndex]->descriptorConfig->assignUniform("material",
+            _baseMaterial[topoIndex]->descriptorConfig->assignDescriptor("material",
                                                                          vsg::PbrMaterialValue::create(pbr));
         }
         return _baseMaterial[topoIndex];

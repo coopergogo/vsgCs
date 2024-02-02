@@ -27,6 +27,7 @@ SOFTWARE.
 #include "CsOverlay.h"
 #include "jsonUtils.h"
 #include "OpThreadTaskProcessor.h"
+#include "pbr.h"
 #include "RuntimeEnvironment.h"
 #include "Tracing.h"
 #include "UrlAssetAccessor.h"
@@ -100,6 +101,8 @@ TilesetNode::TilesetNode(const DeviceFeatures& deviceFeatures, const TilesetSour
                 vsg::warn(details.message);
             }
         };
+    options.enableLodTransitionPeriod = true;
+    options.lodTransitionLength = 1.0f;
     auto externals = RuntimeEnvironment::get()->getTilesetExternals();
     options.contentOptions.ktx2TranscodeTargets = deviceFeatures.ktx2TranscodeTargets;
 
@@ -160,6 +163,40 @@ TilesetNode::~TilesetNode()
 {
     shutdown();
 }
+
+// RecordVisitor action should move into an accept() function
+
+template<class V>
+void TilesetNode::t_traverse(V& visitor) const
+{
+    if (_viewUpdateResult)
+    {
+        for (auto* tile : _viewUpdateResult->tilesToRenderThisFrame)
+        {
+            const auto& tileContent = tile->getContent();
+            if (tileContent.isRenderContent())
+            {
+                const auto* renderResources
+                    = reinterpret_cast<const RenderResources*>(tileContent.getRenderContent()
+                                                               ->getRenderResources());
+                renderResources->model->accept(visitor);
+            }
+        }
+        for (auto* tile : _viewUpdateResult->tilesFadingOut)
+        {
+            const auto& tileContent = tile->getContent();
+            if (tileContent.isRenderContent()
+                && tileContent.getRenderContent()->getLodTransitionFadePercentage() < 1.0f)
+            {
+                const auto* renderResources
+                    = reinterpret_cast<const RenderResources*>(tileContent.getRenderContent()
+                                                               ->getRenderResources());
+                renderResources->model->accept(visitor);
+            }
+        }
+    }
+}
+
 
 std::vector<Cesium3DTilesSelection::Tile*> TilesetNode::getRenderTiles()
 {
@@ -900,6 +937,13 @@ void TilesetNode::UpdateTileset::run()
         return;
     }
     VSGCS_ZONESCOPEDN("update view");
+    float deltaTime = 0.0f;
+    vsg::ref_ptr<vsg::FrameStamp> currentFrameStamp(ref_viewer->getFrameStamp());
+    if (ref_tileset->_lastFrameStamp)
+    {
+        std::chrono::duration<float> diff = currentFrameStamp->time - ref_tileset->_lastFrameStamp->time;
+        deltaTime = diff.count();
+    }
     std::vector<Cesium3DTilesSelection::ViewState> viewStates;
     for_each_view(viewer,
                   [&viewStates](const vsg::ref_ptr<vsg::View>& view, const vsg::ref_ptr<vsg::RenderGraph>& rg)
@@ -910,7 +954,50 @@ void TilesetNode::UpdateTileset::run()
                           viewStates.push_back(viewState.value());
                       }
                   });
-    ref_tileset->_viewUpdateResult = &ref_tileset->_tileset->updateView(viewStates);
+    ref_tileset->_viewUpdateResult = &ref_tileset->_tileset->updateView(viewStates, deltaTime);
+    for (auto* tile : ref_tileset->_viewUpdateResult->tilesToRenderThisFrame)
+    {
+        const auto& tileContent = tile->getContent();
+        if (tileContent.isRenderContent())
+        {
+            const auto* renderResources
+                = reinterpret_cast<const RenderResources*>(tileContent.getRenderContent()
+                                                           ->getRenderResources());
+            auto uboData = CesiumGltfBuilder::getTileData(renderResources->model);
+            if (uboData)
+            {
+                auto fadePercentage = tileContent.getRenderContent()->getLodTransitionFadePercentage();
+                auto [fadeValue, fadeOut] = pbr::getFadeValue(uboData);
+                if (fadeValue != fadePercentage || fadeOut)
+                {
+                    pbr::setFadeValue(uboData, fadePercentage, false);
+                    uboData->dirty();
+                }
+            }
+        }
+    }
+    for (auto* tile : ref_tileset->_viewUpdateResult->tilesFadingOut)
+    {
+        const auto& tileContent = tile->getContent();
+        if (tileContent.isRenderContent())
+        {
+            const auto* renderResources
+                = reinterpret_cast<const RenderResources*>(tileContent.getRenderContent()
+                                                           ->getRenderResources());
+            auto uboData = CesiumGltfBuilder::getTileData(renderResources->model);
+            if (uboData)
+            {
+                auto fadeoutPercentage = tileContent.getRenderContent()->getLodTransitionFadePercentage();
+                auto [fadeValue, fadeOut] = pbr::getFadeValue(uboData);
+                if (fadeValue != fadeoutPercentage || !fadeOut)
+                {
+                    pbr::setFadeValue(uboData, fadeoutPercentage, true);
+                    uboData->dirty();
+                }
+            }
+        }
+    }
+    ref_tileset->_lastFrameStamp = currentFrameStamp;
 }
 
 bool TilesetNode::initialize(const vsg::ref_ptr<vsg::Viewer>& viewer)

@@ -33,15 +33,38 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 namespace vsgCs::pbr
 {
     vsg::ref_ptr<vsg::Data> makeTileData(float geometricError, float maxPointSize,
-                                         const gsl::span<OverlayParams> overlayUniformMem)
+                                         const gsl::span<OverlayParams> overlayUniformMem,
+                                         float fadeValue, bool fadeOut)
     {
+        // All this hair with memcpy is to avoid using reinterpret_cast with a struct, apparently
+        // undefined behavior in C++.
         vsg::vec4 tileScratch;
         tileScratch[0] = geometricError;
         tileScratch[1] = maxPointSize;
+        tileScratch[2] = fadeValue;
+        tileScratch[3] = fadeOut ? 1.0f : 0.0f;
         auto result = vsg::ubyteArray::create(sizeof(vsg::vec4) + overlayUniformMem.size_bytes());
         memcpy(&(*result)[0], &tileScratch, sizeof(tileScratch)); // NOLINT
         memcpy(&(*result)[sizeof(tileScratch)], overlayUniformMem.data(), overlayUniformMem.size_bytes());
         return result;
+    }
+
+    std::pair<float, bool> getFadeValue(const vsg::ref_ptr<vsg::Data>& tileData)
+    {
+        auto tileBufData = ref_ptr_cast<vsg::ubyteArray>(tileData);
+        float fadeValue;
+        memcpy(&fadeValue, tileBufData->data() + sizeof(float) * 2, sizeof(float));
+        float fadeOut;
+        memcpy(&fadeOut, tileBufData->data() + sizeof(float) * 3, sizeof(float));
+        return std::make_pair(fadeValue, fadeOut != 0.0f);
+    }
+
+    void setFadeValue(const vsg::ref_ptr<vsg::Data>& tileData, float fadeValue, bool fadeOut)
+    {
+        auto tileBufData = ref_ptr_cast<vsg::ubyteArray>(tileData);
+        float floatFadeOut = fadeOut ? 1.0f : 0.0f;
+        memcpy(tileBufData->data() + sizeof(float) * 2, &fadeValue, sizeof(float));
+        memcpy(tileBufData->data() + sizeof(float) * 3, &floatFadeOut, sizeof(float));
     }
 
     vsg::ref_ptr<vsg::ShaderSet> makeShaderSetAux(vsg::ref_ptr<vsg::ShaderSet> shaderSet)
@@ -76,7 +99,12 @@ namespace vsgCs::pbr
         shaderSet->addDescriptorBinding("viewData", "", VIEW_DESCRIPTOR_SET, 1,
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 ,VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, vsg::ubyteArray::create(sizeof(vsg::vec4)));
         shaderSet->addDescriptorBinding("shadowMaps", "", VIEW_DESCRIPTOR_SET, 2,
-                                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, vsg::floatArray3D::create(1, 1, 1, vsg::Data::Properties{VK_FORMAT_R32_SFLOAT}));
+                                    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                                        VK_SHADER_STAGE_FRAGMENT_BIT, vsg::floatArray3D::create(1, 1, 1, vsg::Data::Properties{VK_FORMAT_R32_SFLOAT}));
+        // XXX Want a VSGCS_LOD_FADE define here, but that to messes up the descriptor defaulting mechanism.
+        shaderSet->addDescriptorBinding("blueNoise", "", WORLD_DESCRIPTOR_SET, 0,
+                                     VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1,
+                                     VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array2D::create(1, 1));
         shaderSet->addDescriptorBinding("tileParams", "", TILE_DESCRIPTOR_SET, 0,
                                      VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, vsg::vec4Array::create(1 + sizeof(OverlayParams)));
         shaderSet->addDescriptorBinding("overlayTextures", "", TILE_DESCRIPTOR_SET, 1,

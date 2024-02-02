@@ -104,8 +104,9 @@ namespace vsgCs
                                          const vsg::ref_ptr<vsg::Node>& node,
                                          int32_t overlayTextureCoordinateID,
                                          const Cesium3DTilesSelection::RasterOverlayTile& rasterTile);
-    protected:
         static vsg::ref_ptr<vsg::StateGroup> getTileStateGroup(const vsg::ref_ptr<vsg::Node>& node);
+        static vsg::ref_ptr<vsg::Data> getTileData(const vsg::ref_ptr<vsg::Node>& node);
+    protected:
         vsg::ref_ptr<GraphicsEnvironment> _genv;
     };
 

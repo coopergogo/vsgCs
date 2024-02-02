@@ -158,7 +158,8 @@ vsg::ref_ptr<vsg::StateCommand> makeTileStateCommand(const vsg::ref_ptr<Graphics
     descriptorBuilder->assignTexture("overlayTextures", rasterImages);
     auto ubo = pbr::makeTileData(tile.getGeometricError(), std::min(genv->features.pointSizeRange[1], 1.0f),
                                  overlayParams);
-    descriptorBuilder->assignUniform("tileParams", ubo);
+    ubo->properties.dataVariance = vsg::DYNAMIC_DATA;
+    descriptorBuilder->assignDescriptor("tileParams", ubo);
     if (descriptorBuilder->descriptorSets.size() < pbr::TILE_DESCRIPTOR_SET + 1
         || !descriptorBuilder->descriptorSets[pbr::TILE_DESCRIPTOR_SET])
     {
@@ -214,6 +215,29 @@ vsg::ref_ptr<vsg::StateGroup> CesiumGltfBuilder::getTileStateGroup(const vsg::re
     return ref_ptr_cast<vsg::StateGroup>(transformNode->children[0]);
 }
 
+vsg::ref_ptr<vsg::Data> CesiumGltfBuilder::getTileData(const vsg::ref_ptr<vsg::Node>& node)
+{
+    auto tileSG = CesiumGltfBuilder::getTileStateGroup(node);
+    if (tileSG)
+    {
+        // only 1 state command
+        auto bindDesc = ref_ptr_cast<vsg::BindDescriptorSet>(tileSG->stateCommands[0]);
+        auto ds = bindDesc->descriptorSet;
+        auto descBuffItr = std::find_if(ds->descriptors.begin(), ds->descriptors.end(),
+                                        [](auto && descriptor)
+                                        { return !!ref_ptr_cast<vsg::DescriptorBuffer>(descriptor); });
+        if (descBuffItr == ds->descriptors.end())
+        {
+            vsg::warn("could not find tile DescriptorBuffer");
+            return {};
+        }
+        auto descBuff = ref_ptr_cast<vsg::DescriptorBuffer>(*descBuffItr);
+        auto uboData = descBuff->bufferInfoList[0]->data;
+        return uboData;
+    }
+    return {};
+}
+
 vsg::ref_ptr<vsg::Node> CesiumGltfBuilder::loadTile(Cesium3DTilesSelection::TileLoadResult&& tileLoadResult,
                                                     const glm::dmat4 &transform,
                                                     const CreateModelOptions& modelOptions)
@@ -256,6 +280,14 @@ vsg::ref_ptr<vsg::Node> CesiumGltfBuilder::loadTile(Cesium3DTilesSelection::Tile
     return transformNode;
 }
 
+// Due to the workings of cesium-native, the BindDescriptorSet command for a
+// tile's overlay textures and tile parameters needs to be created in the main
+// thread. The tile parameters need to be writeable (fading), and in order to
+// get at its buffer we need to maintain a consistent state in the StateGroup
+// i.e., only one command. Later we may add a direct ref_ptr to a tile's
+// writable data from the RenderResources structure, but that will still need to
+// be the same data that is bound to a buffer in the state command.
+
 AttachTileDataResult
 CesiumGltfBuilder::attachTileData(Cesium3DTilesSelection::Tile& tile,
                                   const vsg::ref_ptr<vsg::Node>& node)
@@ -263,6 +295,10 @@ CesiumGltfBuilder::attachTileData(Cesium3DTilesSelection::Tile& tile,
     auto rasters = getOrCreateRasters(node);
     auto tileStateGroup = getTileStateGroup(node);
     auto tileStateCommand = makeTileStateCommand(_genv, *rasters, tile);
+    if (!tileStateGroup->stateCommands.empty())
+    {
+        vsg::warn("tile state group already has command.");
+    }
     tileStateGroup->add(tileStateCommand);
     // Were we able to create a CullNode for this tile?
     auto transformNode = ref_ptr_cast<vsg::MatrixTransform>(node);
@@ -344,11 +380,11 @@ ModifyRastersResult CesiumGltfBuilder::attachRaster(const Cesium3DTilesSelection
     // XXX Should check data or something in the state command instead of relying on the number of
     // commands in the group.
     auto& stateCommands = stateGroup->stateCommands;
-    if (stateCommands.size() > 1)
+    if (!stateCommands.empty())
     {
         result.deleteObjects.insert(result.deleteObjects.end(),
-                                    stateCommands.begin() + 1, stateCommands.end());
-        stateCommands.erase(stateCommands.begin() + 1, stateCommands.end());
+                                    stateCommands.begin(), stateCommands.end());
+        stateCommands.clear();
     }
     stateCommands.push_back(command);
     result.compileObjects.emplace_back(command);
@@ -374,18 +410,17 @@ CesiumGltfBuilder::detachRaster(const Cesium3DTilesSelection::Tile& tile,
         rasterData.rasterImage = {}; // ref to rasterImage is still held by the old StateCommand
         rasterData.overlayParams.enabled = 0;
         auto newCommand = makeTileStateCommand(_genv, *rasters, tile);
-        vsg::ref_ptr<vsg::Command> oldCommand;
         // XXX Should check data or something in the state command instead of relying on the number of
         // commands in the group.
         auto& stateCommands = stateGroup->stateCommands;
-        if (stateCommands.size() > 1)
+        if (!stateCommands.empty())
         {
-            oldCommand = *(stateCommands.begin() + 1);
-            stateCommands.erase(stateCommands.begin() + 1);
+            result.deleteObjects.insert(result.deleteObjects.end(),
+                                        stateCommands.begin(), stateCommands.end());
+            stateCommands.clear();
         }
         stateCommands.push_back(newCommand);
         result.compileObjects.emplace_back(newCommand);
-        result.deleteObjects.emplace_back(oldCommand);
     }
     return result;
 }
