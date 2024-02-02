@@ -13,6 +13,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 </editor-fold> */
 
+#include "CsApp/CreditComponent.h"
+
 #include <vsg/all.h>
 
 #ifdef vsgXchange_FOUND
@@ -25,6 +27,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include <sstream>
 #include <stdexcept>
 #include <thread>
+
+#include <vsgImGui/imgui.h>
+#include <vsgImGui/SendEventsToImGui.h>
 
 #include "vsgCs/TilesetNode.h"
 #include "vsgCs/CsOverlay.h"
@@ -775,7 +780,14 @@ int main(int argc, char** argv)
     viewer->addEventHandler(_trackball);
 
 
-    // viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
+    auto &ionIconComponent = CsApp::CreditComponent::create();
+    auto &renderImGui = vsgImGui::RenderImGui::create(window, ionIconComponent);
+
+    displayRenderGraph->addChild(renderImGui);
+
+    viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
+
+
 
     // for offscreen
     auto device = window->getOrCreateDevice();
