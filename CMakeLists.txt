@@ -35,7 +35,7 @@ endif()
 
 message("Fetching and make-available vsg ...")
 
-set(VSG_MIN_VERSION 1.0.8)
+set(VSG_MIN_VERSION 1.0.9)
 add_subdirectory(third_party/vsg)
 
 # find_package(vsg) includes vsgMacros
