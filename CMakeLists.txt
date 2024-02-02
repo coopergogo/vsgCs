@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.22)
 
 include(FetchContent)
 
@@ -35,7 +35,7 @@ endif()
 
 message("Fetching and make-available vsg ...")
 
-set(VSG_MIN_VERSION 1.0.8)
+set(VSG_MIN_VERSION 1.1.0)
 add_subdirectory(third_party/vsg)
 
 # find_package(vsg) includes vsgMacros
