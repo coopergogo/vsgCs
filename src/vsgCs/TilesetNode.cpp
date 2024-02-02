@@ -743,39 +743,6 @@ RenderContent* TilesetNode::getRenderContent()
     return renderContent;
 }
 
-template<class V>
-void TilesetNode::t_traverse(V& visitor) const
-{
-    if (_viewUpdateResult)
-    {
-        long long tileCount = 0;
-        for (auto* tile : _viewUpdateResult->tilesToRenderThisFrame)
-        {
-            const auto& tileContent = tile->getContent();
-            if (tileContent.isRenderContent())
-            {
-                tileCount++;
-#if 0
-                std::time_t now = std::time(nullptr);
-                auto timestampMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-                auto tileIDStr =  Cesium3DTilesSelection::TileIdUtilities::createTileIdString(tile->getTileID());
-                vsg::warn("tileContentRender: ", timestampMs, " - ", tileIDStr);
-#endif
-                const auto* renderResources
-                    = reinterpret_cast<const RenderResources*>(tileContent.getRenderContent()
-                                                               ->getRenderResources());
-                renderResources->model->accept(visitor);
-            }
-        }
-
-# if 0
-        vsg::warn("tileContentRender: ", " - render-tile-count:", tileCount);
-#endif
-
-    }
-}
-
 void TilesetNode::traverse(vsg::Visitor& visitor)
 {
     t_traverse(visitor);
