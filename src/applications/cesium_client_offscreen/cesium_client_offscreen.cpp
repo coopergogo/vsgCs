@@ -827,7 +827,7 @@ int main(int argc, char** argv)
     offscreenCamera->viewportState = vsg::ViewportState::create(window->extent2D());
 
     auto offscreenSwitch = vsg::Switch::create();
-    bool offscreenEnabled = false;
+    bool offscreenEnabled = true;
 
     offscreenSwitch->addChild(offscreenEnabled, offscreenRenderGraph);
     offscreenSwitch->addChild(offscreenEnabled, captureCommands);
