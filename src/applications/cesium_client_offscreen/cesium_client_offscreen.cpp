@@ -765,7 +765,7 @@ int main(int argc, char** argv)
     viewer->addEventHandler(vsg::CloseHandler::create(viewer));
     // viewer->addEventHandler(vsg::Trackball::create(displayCamera));
 
-    auto &_trackball = vsg::Trackball::create(displayCamera, ellipsoidModel);
+    auto &_trackball = vsg::Trackball::create(displayCamera);
     {
         // osgEarthStyleMouseButtons
         _trackball->panButtonMask = vsg::BUTTON_MASK_1;
