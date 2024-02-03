@@ -875,6 +875,7 @@ int main(int argc, char** argv)
     // Initialize viewer with tilesets
     tilesetNode->initialize(viewer);
 
+    offscreenEnabled = false;
     offscreenSwitch->setAllChildren(offscreenEnabled);
 
     // rendering main loop
