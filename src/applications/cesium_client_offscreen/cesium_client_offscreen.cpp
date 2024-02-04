@@ -835,7 +835,7 @@ int main(int argc, char** argv)
     offscreenRenderGraph->framebuffer = createOffscreenFramebuffer(device, transferImageView, samples);
     offscreenRenderGraph->renderArea.extent = offscreenRenderGraph->framebuffer->extent2D();
     offscreenRenderGraph->setClearValues(
-        VkClearColorValue{{0.0f, 0.0f, 0.0f, 0.0f}},
+        VkClearColorValue{{0.02899f, 0.02899f, 0.13321f, 0.0f}},
         VkClearDepthStencilValue{0.0f, 0});
 
     /**
