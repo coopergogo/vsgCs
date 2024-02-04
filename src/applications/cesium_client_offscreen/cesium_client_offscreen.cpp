@@ -401,7 +401,7 @@ vsg::ref_ptr<vsg::Framebuffer> createOffscreenFramebuffer(
 {
     VkFormat imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
     VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
-    bool requiresDepthRead = false;
+    bool requiresDepthRead = true;
 
     VkExtent2D const extent{
         transferImageView->image->extent.width,
@@ -593,6 +593,35 @@ void saveImage(
     auto imageData = getImageData(viewer, device, captureImage);
     vsg::write(imageData, filename, options);
     vsg::info("image saved.");
+}
+
+vsg::ref_ptr<vsg::Framebuffer> getOffscreenFramebuffer(
+     vsg::ref_ptr<vsg::Device> device,
+     VkSampleCountFlagBits samples,
+     VkExtent2D offscreenExtent,
+     VkFormat offscreenImageFormat
+){
+    vsg::warn("hander - get-offscreen-framebuffer begin...");
+
+    // auto prevCaptureCommands = captureCommands;
+
+    // offscreenExtent = displayExtent;
+    // offscreenPerspective->aspectRatio = static_cast<double>(offscreenExtent.width) / static_cast<double>(offscreenExtent.height);
+    // offscreenCamera->viewportState->set(0, 0, offscreenExtent.width, offscreenExtent.height);
+
+    // transferImageView = createTransferImageView(device, offscreenImageFormat, offscreenExtent, VK_SAMPLE_COUNT_1_BIT);
+    // captureImage = createCaptureImage(device, offscreenImageFormat, offscreenExtent);
+    // captureCommands = createTransferCommands(device, transferImageView->image, captureImage);
+
+    // replaceChild(offscreenCommandGraph, prevCaptureCommands, captureCommands);
+
+    auto &transferImageView = createTransferImageView(device, offscreenImageFormat, offscreenExtent, VK_SAMPLE_COUNT_1_BIT);
+
+    auto &framebuffer = createOffscreenFramebuffer(device, transferImageView, samples);
+
+    vsg::warn("hander - get-offscreen-framebuffer finished");
+
+    return framebuffer;
 }
 
 class ScreenshotHandler : public vsg::Inherit<vsg::Visitor, ScreenshotHandler>
@@ -935,6 +964,8 @@ int main(int argc, char** argv)
             saveImage(captureFilename, viewer, device, captureImage, options);
             vsg::warn("hander - image capture finished");
         }
+
+        auto &fbuffer = getOffscreenFramebuffer(device, samples, displayCamera->getRenderArea().extent, offscreenImageFormat);
     }
 
     tilesetNode->shutdown();
