@@ -37,7 +37,56 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include "vsgCs/RuntimeEnvironment.h"
 
 #include "UI.h"
-// #include "cesium_client_offscreen.h"
+#include "cesium_client_offscreen.h"
+
+
+int vsgCs::OffscreenControl::setLookAt(long epsgCode, vsg::dvec3 eye,  vsg::dvec3 center,  vsg::dvec3 up)
+{
+    if (epsgCode != 4979) {
+        vsg::error("lookAt-epsgCode for eye/center/up shoud be EPSG:4979");
+    }
+
+    _epsgCode = epsgCode;
+    _eye = eye;
+    _center = center;
+    _up = up;
+
+    _lookAt->eye = eye;
+    _lookAt->center = center;
+    _lookAt->up = up;
+
+    return 0;
+}
+
+int vsgCs::OffscreenControl::setViewport(float x, float y, float width, float height)
+{
+    _x = x;
+    _y = y;
+
+    _width = width;
+    _height = height;
+
+    _viewportState->set(0, 0, width, height);
+
+    return 0;
+}
+
+int vsgCs::CesiumClient::applyLookAt()
+{
+
+    _trackball->setViewpoint(_offscreenControl->getLookAt(), 1.0f);
+    return 0;
+}
+
+
+int vsgCs::CesiumClient::applyViewport()
+{
+    auto &viewport = _offscreenControl->getViewport();
+    _displayCamera->viewportState->set(viewport.x, viewport.y, viewport.width, viewport.height);
+    _offscreenCamera->viewportState->set(viewport.x, viewport.y, viewport.width, viewport.height);
+
+    return 0;
+}
 
 bool supportsBlit(vsg::ref_ptr<vsg::Device> device, VkFormat format)
 {
