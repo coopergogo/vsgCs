@@ -36,6 +36,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include "vsgCs/OpThreadTaskProcessor.h"
 #include "vsgCs/RuntimeEnvironment.h"
 
+#include "UI.h"
+// #include "cesium_client_offscreen.h"
+
 bool supportsBlit(vsg::ref_ptr<vsg::Device> device, VkFormat format)
 {
     auto physicalDevice = device->getPhysicalDevice();
@@ -795,28 +798,10 @@ int main(int argc, char** argv)
         VkClearColorValue{{0.02899f, 0.02899f, 0.13321f, 0.0f}},
         VkClearDepthStencilValue{0.0f, 0});
 
-    // add close handler to respond to the close window button and pressing escape
-    viewer->addEventHandler(vsg::CloseHandler::create(viewer));
-    // viewer->addEventHandler(vsg::Trackball::create(displayCamera));
-
-    auto &_trackball = vsg::Trackball::create(displayCamera);
-    {
-        // osgEarthStyleMouseButtons
-        _trackball->panButtonMask = vsg::BUTTON_MASK_1;
-        _trackball->rotateButtonMask = vsg::BUTTON_MASK_2;
-        _trackball->zoomButtonMask = vsg::BUTTON_MASK_3;
-    }
-    viewer->addEventHandler(_trackball);
-
-
-    auto &ionIconComponent = CsApp::CreditComponent::create();
-    auto &renderImGui = vsgImGui::RenderImGui::create(window, ionIconComponent);
-
-    displayRenderGraph->addChild(renderImGui);
-
-    viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
-
-
+    // add ui & imgui
+    auto ui = vsgCs::UI::create();
+    ui->createUI2(window, viewer, displayCamera, environment->options);
+    displayRenderGraph->addChild(ui->getImGui());
 
     // for offscreen
     auto device = window->getOrCreateDevice();
@@ -910,6 +895,17 @@ int main(int argc, char** argv)
     // rendering main loop
     while (viewer->advanceToNextFrame())
     {
+        // if (setViewpointAfterLoad
+        //     && tilesetNode->getTileset()
+        //     && tilesetNode->getTileset()->getRootTile())
+        // {
+        //     lookAt = vsgCs::makeLookAtFromTile(tilesetNode->getTileset()->getRootTile(),
+        //                                         poi_distance);
+        //     ui->setViewpoint(lookAt, 1.0);
+        //     setViewpointAfterLoad = false;
+
+        // }
+
         viewer->handleEvents();
 
         if (screenshotHandler->do_sync_extent)
