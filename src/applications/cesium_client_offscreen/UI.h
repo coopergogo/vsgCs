@@ -25,7 +25,15 @@ namespace vsgCs
         {
             return _renderImGui;
         }
+
+        vsg::ref_ptr<vsg::Trackball> getTrackball()
+        {
+            return _trackball;
+        }
+
         void setViewpoint(const vsg::ref_ptr<vsg::LookAt>& lookAt, float duration);
+
+
         protected:
         vsg::ref_ptr<vsgImGui::RenderImGui> createImGui(const vsg::ref_ptr<vsg::Window>& window);
 

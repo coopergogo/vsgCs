@@ -34,6 +34,8 @@ namespace vsgCs
     class OffscreenControl: public vsg::Inherit<vsg::Object, OffscreenControl>
     {
         public:
+        OffscreenControl();
+
         int setLookAt(long epsgCode, vsg::dvec3 eye,  vsg::dvec3 center,  vsg::dvec3 up);
         int setViewport(float x, float y, float width, float height);
 
@@ -59,14 +61,23 @@ namespace vsgCs
         public:
         int renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &options);
 
+        void setOffscreenControl(vsg::ref_ptr<OffscreenControl> offscreenControl) { _offscreenControl = offscreenControl; }
+        vsg::ref_ptr<OffscreenControl> getOffscreenControl() { return _offscreenControl; }
+
+        void setTrackball(vsg::ref_ptr<vsg::Trackball> trackball) { _trackball = trackball; }
+        void setDisplayCamera(vsg::ref_ptr<vsg::Camera> displayCamera) { _displayCamera = displayCamera; }
+        void setOffscreenCamera(vsg::ref_ptr<vsg::Camera> offscreenCamera) { _offscreenCamera = offscreenCamera; }
+
+        // int setLookAt(long epsgCode, vsg::dvec3 eye,  vsg::dvec3 center,  vsg::dvec3 up);
+        // int setViewport(float x, float y, float width, float height);
         int applyLookAt();
         int applyViewport();
 
         protected:
         vsg::ref_ptr<CommandOptions> _options;
 
-        vsg::ref_ptr<vsg::Trackball> _trackball;
         vsg::ref_ptr<OffscreenControl> _offscreenControl;
+        vsg::ref_ptr<vsg::Trackball> _trackball;
 
         vsg::ref_ptr<vsg::Camera> _displayCamera;
         vsg::ref_ptr<vsg::Camera> _offscreenCamera;

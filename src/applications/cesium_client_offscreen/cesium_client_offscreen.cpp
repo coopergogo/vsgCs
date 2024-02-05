@@ -39,6 +39,11 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include "UI.h"
 #include "cesium_client_offscreen.h"
 
+vsgCs::OffscreenControl::OffscreenControl() :
+    _lookAt(vsg::LookAt::create()), _eye(vsg::dvec3()), _center(vsg::dvec3()), _up(vsg::dvec3()), _epsgCode(4979),
+    _viewportState(vsg::ViewportState::create()), _x(0), _y(0), _width(800), _height(640)
+{
+}
 
 int vsgCs::OffscreenControl::setLookAt(long epsgCode, vsg::dvec3 eye,  vsg::dvec3 center,  vsg::dvec3 up)
 {
@@ -508,7 +513,7 @@ std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCame
     return std::tie(camera, perspective);
 }
 
-std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCameraForScene(
+std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>, vsg::ref_ptr<vsg::LookAt>> createCameraForScene(
     vsg::Node* scenegraph, vsg::ref_ptr<vsg::EllipsoidModel> &ellipsoidModel, const VkExtent2D& extent)
 {
     // // compute the bounds of the scene graph to help position camera
@@ -573,7 +578,7 @@ std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCame
         horizonMountainHeight);
 
     auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(extent));
-    return std::tie(camera, perspective);
+    return std::tie(camera, perspective, lookAt);
 }
 
 void replaceChild(vsg::Group* group, vsg::ref_ptr<vsg::Node> previous, vsg::ref_ptr<vsg::Node> replacement)
@@ -841,7 +846,7 @@ int main(int argc, char** argv)
     vsg_scene = transform;
 
 
-    auto [displayCamera, displayPerspective] = createCameraForScene(vsg_scene, ellipsoidModel, window->extent2D());
+    auto [displayCamera, displayPerspective, displayLookAt] = createCameraForScene(vsg_scene, ellipsoidModel, window->extent2D());
     auto displayRenderGraph = vsg::createRenderGraphForView(window, displayCamera, vsg_scene);
     displayRenderGraph->setClearValues(
         VkClearColorValue{{0.02899f, 0.02899f, 0.13321f, 0.0f}},
@@ -941,19 +946,51 @@ int main(int argc, char** argv)
     offscreenEnabled = false;
     offscreenSwitch->setAllChildren(offscreenEnabled);
 
+    // offscreen-control
+    bool applyOffscreenControl = false;
+
+    vsgCs::CesiumClient csclient;
+    csclient.setTrackball(ui->getTrackball());
+    csclient.setDisplayCamera(displayCamera);
+    csclient.setOffscreenCamera(offscreenCamera);
+
+    auto &offscreenControl = vsgCs::OffscreenControl::create();
+
+    long epsgCode = 4979;
+    offscreenControl->setLookAt(epsgCode, displayLookAt->eye, displayLookAt->center, displayLookAt->up);
+
+    auto &displayViewport = displayCamera->getViewport();
+    offscreenControl->setViewport(displayViewport.x, displayViewport.y, displayViewport.width, displayViewport.height);
+
+    csclient.setOffscreenControl(offscreenControl);
+
     // rendering main loop
     while (viewer->advanceToNextFrame())
     {
-        // if (setViewpointAfterLoad
-        //     && tilesetNode->getTileset()
-        //     && tilesetNode->getTileset()->getRootTile())
-        // {
-        //     lookAt = vsgCs::makeLookAtFromTile(tilesetNode->getTileset()->getRootTile(),
-        //                                         poi_distance);
-        //     ui->setViewpoint(lookAt, 1.0);
-        //     setViewpointAfterLoad = false;
+        if (applyOffscreenControl
+            && tilesetNode->getTileset()
+            && tilesetNode->getTileset()->getRootTile())
+        {
+            auto &offscreenControl = csclient.getOffscreenControl();
 
-        // }
+            auto &lookAt = offscreenControl->getLookAt();
+            auto eye = lookAt->eye;
+            auto center = lookAt->center;
+            auto up = lookAt->up;
+            eye = eye + vsg::dvec3(0.0, 0.1, 0.0);
+            offscreenControl->setLookAt(epsgCode, eye, center, up);
+
+            auto &viewport = offscreenControl->getViewport();
+            auto x = viewport.x;
+            auto y = viewport.y;
+            auto width = viewport.width;
+            auto height = viewport.height;
+            width -= 1;
+            offscreenControl->setViewport(x,y, width, height);
+
+            csclient.applyLookAt();
+            csclient.applyViewport();
+        }
 
         viewer->handleEvents();
 
@@ -1010,7 +1047,7 @@ int main(int argc, char** argv)
             vsg::warn("hander - image capture finished");
         }
 
-        auto &fbuffer = getOffscreenFramebuffer(device, samples, displayCamera->getRenderArea().extent, offscreenImageFormat);
+        // auto &fbuffer = getOffscreenFramebuffer(device, samples, displayCamera->getRenderArea().extent, offscreenImageFormat);
     }
 
     tilesetNode->shutdown();
