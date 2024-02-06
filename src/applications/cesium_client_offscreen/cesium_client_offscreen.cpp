@@ -714,6 +714,168 @@ public:
     }
 };
 
+void screenshot_depth(vsg::Path const& filename, vsg::ref_ptr<vsg::Window> window, vsg::ref_ptr<vsg::Options> options)
+{
+    // do_depth_capture = false;
+
+    auto width = window->extent2D().width;
+    auto height = window->extent2D().height;
+
+    auto device = window->getDevice();
+    auto physicalDevice = window->getPhysicalDevice();
+
+    vsg::ref_ptr<vsg::Image> sourceImage(window->getDepthImage());
+
+    VkFormat sourceImageFormat = window->depthFormat();
+    VkFormat targetImageFormat = sourceImageFormat;
+
+    auto memoryRequirements = sourceImage->getMemoryRequirements(device->deviceID);
+
+    // 1. create buffer to copy to.
+    VkDeviceSize bufferSize = memoryRequirements.size;
+    auto destinationBuffer = vsg::createBufferAndMemory(device, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    auto destinationMemory = destinationBuffer->getDeviceMemory(device->deviceID);
+
+    VkImageAspectFlags imageAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT; // | VK_IMAGE_ASPECT_STENCIL_BIT; // need to match imageAspectFlags setting to WindowTraits::depthFormat.
+
+    // 2.a) transition depth image for reading
+    auto commands = vsg::Commands::create();
+
+    // if (event)
+    // {
+    //     commands->addChild(vsg::WaitEvents::create(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, event));
+    //     commands->addChild(vsg::ResetEvent::create(event, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT));
+    // }
+
+    auto transitionSourceImageToTransferSourceLayoutBarrier = vsg::ImageMemoryBarrier::create(
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, // srcAccessMask
+        VK_ACCESS_TRANSFER_READ_BIT,                                                                // dstAccessMask
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,                                           // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                                                       // newLayout
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // dstQueueFamilyIndex
+        sourceImage,                                                                                // image
+        VkImageSubresourceRange{imageAspectFlags, 0, 1, 0, 1}                                       // subresourceRange
+    );
+
+    auto transitionDestinationBufferToTransferWriteBarrier = vsg::BufferMemoryBarrier::create(
+        VK_ACCESS_MEMORY_READ_BIT,    // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT, // dstAccessMask
+        VK_QUEUE_FAMILY_IGNORED,      // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,      // dstQueueFamilyIndex
+        destinationBuffer,            // buffer
+        0,                            // offset
+        bufferSize                    // size
+    );
+
+    auto cmd_transitionSourceImageToTransferSourceLayoutBarrier = vsg::PipelineBarrier::create(
+        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
+        VK_PIPELINE_STAGE_TRANSFER_BIT,                                                            // dstStageMask
+        0,                                                                                         // dependencyFlags
+        transitionSourceImageToTransferSourceLayoutBarrier,                                        // barrier
+        transitionDestinationBufferToTransferWriteBarrier                                          // barrier
+    );
+    commands->addChild(cmd_transitionSourceImageToTransferSourceLayoutBarrier);
+
+    // 2.b) copy image to buffer
+    {
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = width; // need to figure out actual row length from somewhere...
+        region.bufferImageHeight = height;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = VkOffset3D{0, 0, 0};
+        region.imageExtent = VkExtent3D{width, height, 1};
+
+        auto copyImage = vsg::CopyImageToBuffer::create();
+        copyImage->srcImage = sourceImage;
+        copyImage->srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        copyImage->dstBuffer = destinationBuffer;
+        copyImage->regions.push_back(region);
+
+        commands->addChild(copyImage);
+    }
+
+    // 2.c) transition depth image back for rendering
+    auto transitionSourceImageBackToPresentBarrier = vsg::ImageMemoryBarrier::create(
+        VK_ACCESS_TRANSFER_READ_BIT,                                                                // srcAccessMask
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                                                       // oldLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,                                           // newLayout
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // dstQueueFamilyIndex
+        sourceImage,                                                                                // image
+        VkImageSubresourceRange{imageAspectFlags, 0, 1, 0, 1}                                       // subresourceRange
+    );
+
+    auto transitionDestinationBufferToMemoryReadBarrier = vsg::BufferMemoryBarrier::create(
+        VK_ACCESS_TRANSFER_WRITE_BIT, // srcAccessMask
+        VK_ACCESS_MEMORY_READ_BIT,    // dstAccessMask
+        VK_QUEUE_FAMILY_IGNORED,      // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,      // dstQueueFamilyIndex
+        destinationBuffer,            // buffer
+        0,                            // offset
+        bufferSize                    // size
+    );
+
+    auto cmd_transitionSourceImageBackToPresentBarrier = vsg::PipelineBarrier::create(
+        VK_PIPELINE_STAGE_TRANSFER_BIT,                                                            // srcStageMask
+        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // dstStageMask
+        0,                                                                                         // dependencyFlags
+        transitionSourceImageBackToPresentBarrier,                                                 // barrier
+        transitionDestinationBufferToMemoryReadBarrier                                             // barrier
+    );
+
+    commands->addChild(cmd_transitionSourceImageBackToPresentBarrier);
+
+    auto fence = vsg::Fence::create(device);
+    auto queueFamilyIndex = physicalDevice->getQueueFamily(VK_QUEUE_GRAPHICS_BIT);
+    auto commandPool = vsg::CommandPool::create(device, queueFamilyIndex);
+    auto queue = device->getQueue(queueFamilyIndex);
+
+    vsg::submitCommandsToQueue(commandPool, fence, 100000000000, queue, [&](vsg::CommandBuffer& commandBuffer) {
+        commands->record(commandBuffer);
+    });
+
+    // 3. map buffer and copy data.
+
+    // Map the buffer memory and assign as a vec4Array2D that will automatically unmap itself on destruction.
+    if (targetImageFormat == VK_FORMAT_D32_SFLOAT || targetImageFormat == VK_FORMAT_D32_SFLOAT_S8_UINT)
+    {
+        auto imageData = vsg::MappedData<vsg::floatArray2D>::create(destinationMemory, 0, 0, vsg::Data::Properties{targetImageFormat}, width, height); // deviceMemory, offset, flags and dimensions
+
+        size_t num_set_depth = 0;
+        size_t num_unset_depth = 0;
+        for (auto& value : *imageData)
+        {
+            if (value == 0.0f)
+                ++num_unset_depth;
+            else
+                ++num_set_depth;
+        }
+
+        std::cout << "num_unset_depth = " << num_unset_depth << std::endl;
+        std::cout << "num_set_depth = " << num_set_depth << std::endl;
+
+        if (vsg::write(imageData, filename, options))
+        {
+            std::cout<<"Written depth buffer to "<<filename<<std::endl;
+        }
+    }
+    else
+    {
+        auto imageData = vsg::MappedData<vsg::uintArray2D>::create(destinationMemory, 0, 0, vsg::Data::Properties{targetImageFormat}, width, height); // deviceMemory, offset, flags and dimensions
+
+        if (vsg::write(imageData, filename))
+        {
+            std::cout<<"Written depth buffer to "<<filename<<std::endl;
+        }
+    }
+}
+
+
+
 int main(int argc, char** argv)
 {
     // set up defaults and read command line arguments to override them
@@ -730,6 +892,7 @@ int main(int argc, char** argv)
 
     // offscreen capture filename and multi sampling parameters
     auto captureFilename = arguments.value<vsg::Path>("screenshot.vsgt", {"--capture-file", "-f"});
+    auto captureDepthFilename = arguments.value<vsg::Path>("depth.vsgt", {"--capture-depth-file", "-d"});
     bool msaa = arguments.read("--msaa");
 
     // tileset
@@ -1063,6 +1226,7 @@ int main(int argc, char** argv)
             offscreenEnabled = false;
             offscreenSwitch->setAllChildren(offscreenEnabled);
             saveImage(captureFilename, viewer, device, captureImage, options);
+            screenshot_depth(captureDepthFilename, window, options);
             vsg::warn("hander - image capture finished");
         }
 
