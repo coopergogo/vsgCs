@@ -90,6 +90,14 @@ int vsgCs::CesiumClient::applyViewport()
     _displayCamera->viewportState->set(viewport.x, viewport.y, viewport.width, viewport.height);
     _offscreenCamera->viewportState->set(viewport.x, viewport.y, viewport.width, viewport.height);
 
+    auto &offscreenPerspective = vsgCs::ref_ptr_cast<vsg::Perspective>(_offscreenCamera->projectionMatrix);
+    offscreenPerspective->aspectRatio = viewport.width / viewport.height;
+    _offscreenRenderGraph->resized();
+
+    auto &displayPerspective = vsgCs::ref_ptr_cast<vsg::Perspective>(_displayCamera->projectionMatrix);
+    displayPerspective->aspectRatio = viewport.width / viewport.height;
+    _displayRenderGraph->resized();
+
     return 0;
 }
 
@@ -947,12 +955,12 @@ int main(int argc, char** argv)
     offscreenSwitch->setAllChildren(offscreenEnabled);
 
     // offscreen-control
-    bool applyOffscreenControl = false;
-
     vsgCs::CesiumClient csclient;
     csclient.setTrackball(ui->getTrackball());
     csclient.setDisplayCamera(displayCamera);
     csclient.setOffscreenCamera(offscreenCamera);
+    csclient.setDisplayRenderGraph(displayRenderGraph);
+    csclient.setOffscreenRenderGraph(offscreenRenderGraph);
 
     auto &offscreenControl = vsgCs::OffscreenControl::create();
 
@@ -964,6 +972,9 @@ int main(int argc, char** argv)
 
     csclient.setOffscreenControl(offscreenControl);
 
+    bool applyOffscreenControl = true;
+    bool enableOffscreenControlDemo = true;
+
     // rendering main loop
     while (viewer->advanceToNextFrame())
     {
@@ -971,22 +982,30 @@ int main(int argc, char** argv)
             && tilesetNode->getTileset()
             && tilesetNode->getTileset()->getRootTile())
         {
-            auto &offscreenControl = csclient.getOffscreenControl();
+            if (enableOffscreenControlDemo) {
+                auto &offscreenControl = csclient.getOffscreenControl();
 
-            auto &lookAt = offscreenControl->getLookAt();
-            auto eye = lookAt->eye;
-            auto center = lookAt->center;
-            auto up = lookAt->up;
-            eye = eye + vsg::dvec3(0.0, 0.1, 0.0);
-            offscreenControl->setLookAt(epsgCode, eye, center, up);
+                auto &lookAt = offscreenControl->getLookAt();
+                auto eye = lookAt->eye;
+                auto center = lookAt->center;
+                auto up = lookAt->up;
+                eye = eye + vsg::dvec3(0.0, 0.1, 0.0);
+                offscreenControl->setLookAt(epsgCode, eye, center, up);
 
-            auto &viewport = offscreenControl->getViewport();
-            auto x = viewport.x;
-            auto y = viewport.y;
-            auto width = viewport.width;
-            auto height = viewport.height;
-            width -= 1;
-            offscreenControl->setViewport(x,y, width, height);
+                auto &viewport = offscreenControl->getViewport();
+                auto x = viewport.x;
+                auto y = viewport.y;
+                auto width = viewport.width;
+                auto height = viewport.height;
+                vsg::warn("x:",x, ",y:",y, ",width:",width, ",height:", height);
+                width -= 1;
+                offscreenControl->setViewport(x,y, width, height);
+
+                // offscreenPerspective->aspectRatio = width / height;
+                // offscreenRenderGraph->resized();
+                // displayPerspective->aspectRatio = width / height;
+                // displayRenderGraph->resized();
+            }
 
             csclient.applyLookAt();
             csclient.applyViewport();

@@ -61,12 +61,16 @@ namespace vsgCs
         public:
         int renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &options);
 
-        void setOffscreenControl(vsg::ref_ptr<OffscreenControl> offscreenControl) { _offscreenControl = offscreenControl; }
+        void setOffscreenControl(vsg::ref_ptr<OffscreenControl> &offscreenControl) { _offscreenControl = offscreenControl; }
         vsg::ref_ptr<OffscreenControl> getOffscreenControl() { return _offscreenControl; }
 
-        void setTrackball(vsg::ref_ptr<vsg::Trackball> trackball) { _trackball = trackball; }
-        void setDisplayCamera(vsg::ref_ptr<vsg::Camera> displayCamera) { _displayCamera = displayCamera; }
-        void setOffscreenCamera(vsg::ref_ptr<vsg::Camera> offscreenCamera) { _offscreenCamera = offscreenCamera; }
+        void setTrackball(vsg::ref_ptr<vsg::Trackball> &trackball) { _trackball = trackball; }
+
+        void setDisplayCamera(vsg::ref_ptr<vsg::Camera> &displayCamera) { _displayCamera = displayCamera; }
+        void setOffscreenCamera(vsg::ref_ptr<vsg::Camera> &offscreenCamera) { _offscreenCamera = offscreenCamera; }
+
+        void setDisplayRenderGraph(vsg::ref_ptr<vsg::RenderGraph> &displayRenderGraph) { _displayRenderGraph = displayRenderGraph; }
+        void setOffscreenRenderGraph(vsg::ref_ptr<vsg::RenderGraph> &offscreenRenderGraph) { _offscreenRenderGraph = offscreenRenderGraph; }
 
         // int setLookAt(long epsgCode, vsg::dvec3 eye,  vsg::dvec3 center,  vsg::dvec3 up);
         // int setViewport(float x, float y, float width, float height);
@@ -81,5 +85,7 @@ namespace vsgCs
 
         vsg::ref_ptr<vsg::Camera> _displayCamera;
         vsg::ref_ptr<vsg::Camera> _offscreenCamera;
+        vsg::ref_ptr<vsg::RenderGraph> _displayRenderGraph;
+        vsg::ref_ptr<vsg::RenderGraph> _offscreenRenderGraph;
     };
 }
