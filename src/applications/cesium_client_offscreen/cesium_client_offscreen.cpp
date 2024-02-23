@@ -36,6 +36,71 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include "vsgCs/OpThreadTaskProcessor.h"
 #include "vsgCs/RuntimeEnvironment.h"
 
+#include "UI.h"
+#include "cesium_client_offscreen.h"
+
+vsgCs::OffscreenControl::OffscreenControl() :
+    _lookAt(vsg::LookAt::create()), _eye(vsg::dvec3()), _center(vsg::dvec3()), _up(vsg::dvec3()), _epsgCode(4979),
+    _viewportState(vsg::ViewportState::create()), _x(0), _y(0), _width(800), _height(640)
+{
+}
+
+int vsgCs::OffscreenControl::setLookAt(long epsgCode, vsg::dvec3 eye,  vsg::dvec3 center,  vsg::dvec3 up)
+{
+    if (epsgCode != 4979) {
+        vsg::error("lookAt-epsgCode for eye/center/up shoud be EPSG:4979");
+    }
+
+    _epsgCode = epsgCode;
+    _eye = eye;
+    _center = center;
+    _up = up;
+
+    _lookAt->eye = eye;
+    _lookAt->center = center;
+    _lookAt->up = up;
+
+    return 0;
+}
+
+int vsgCs::OffscreenControl::setViewport(float x, float y, float width, float height)
+{
+    _x = x;
+    _y = y;
+
+    _width = width;
+    _height = height;
+
+    _viewportState->set(0, 0, width, height);
+
+    return 0;
+}
+
+int vsgCs::CesiumClient::applyLookAt()
+{
+
+    _trackball->setViewpoint(_offscreenControl->getLookAt(), 1.0f);
+    return 0;
+}
+
+
+int vsgCs::CesiumClient::applyViewport()
+{
+    auto &viewport = _offscreenControl->getViewport();
+    _displayCamera->viewportState->set(viewport.x, viewport.y, viewport.width, viewport.height);
+    _offscreenCamera->viewportState->set(viewport.x, viewport.y, viewport.width, viewport.height);
+
+    auto &offscreenPerspective = vsgCs::ref_ptr_cast<vsg::Perspective>(_offscreenCamera->projectionMatrix);
+    offscreenPerspective->aspectRatio = viewport.width / viewport.height;
+    _offscreenRenderGraph->resized();
+
+    auto &displayPerspective = vsgCs::ref_ptr_cast<vsg::Perspective>(_displayCamera->projectionMatrix);
+    displayPerspective->aspectRatio = viewport.width / viewport.height;
+    _displayRenderGraph->resized();
+
+    return 0;
+}
+
 bool supportsBlit(vsg::ref_ptr<vsg::Device> device, VkFormat format)
 {
     auto physicalDevice = device->getPhysicalDevice();
@@ -456,7 +521,7 @@ std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCame
     return std::tie(camera, perspective);
 }
 
-std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCameraForScene(
+std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>, vsg::ref_ptr<vsg::LookAt>> createCameraForScene(
     vsg::Node* scenegraph, vsg::ref_ptr<vsg::EllipsoidModel> &ellipsoidModel, const VkExtent2D& extent)
 {
     // // compute the bounds of the scene graph to help position camera
@@ -521,7 +586,7 @@ std::tuple<vsg::ref_ptr<vsg::Camera>, vsg::ref_ptr<vsg::Perspective>> createCame
         horizonMountainHeight);
 
     auto camera = vsg::Camera::create(perspective, lookAt, vsg::ViewportState::create(extent));
-    return std::tie(camera, perspective);
+    return std::tie(camera, perspective, lookAt);
 }
 
 void replaceChild(vsg::Group* group, vsg::ref_ptr<vsg::Node> previous, vsg::ref_ptr<vsg::Node> replacement)
@@ -649,6 +714,168 @@ public:
     }
 };
 
+void screenshot_depth(vsg::Path const& filename, vsg::ref_ptr<vsg::Window> window, vsg::ref_ptr<vsg::Options> options)
+{
+    // do_depth_capture = false;
+
+    auto width = window->extent2D().width;
+    auto height = window->extent2D().height;
+
+    auto device = window->getDevice();
+    auto physicalDevice = window->getPhysicalDevice();
+
+    vsg::ref_ptr<vsg::Image> sourceImage(window->getDepthImage());
+
+    VkFormat sourceImageFormat = window->depthFormat();
+    VkFormat targetImageFormat = sourceImageFormat;
+
+    auto memoryRequirements = sourceImage->getMemoryRequirements(device->deviceID);
+
+    // 1. create buffer to copy to.
+    VkDeviceSize bufferSize = memoryRequirements.size;
+    auto destinationBuffer = vsg::createBufferAndMemory(device, bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_SHARING_MODE_EXCLUSIVE, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    auto destinationMemory = destinationBuffer->getDeviceMemory(device->deviceID);
+
+    VkImageAspectFlags imageAspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT; // | VK_IMAGE_ASPECT_STENCIL_BIT; // need to match imageAspectFlags setting to WindowTraits::depthFormat.
+
+    // 2.a) transition depth image for reading
+    auto commands = vsg::Commands::create();
+
+    // if (event)
+    // {
+    //     commands->addChild(vsg::WaitEvents::create(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, event));
+    //     commands->addChild(vsg::ResetEvent::create(event, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT));
+    // }
+
+    auto transitionSourceImageToTransferSourceLayoutBarrier = vsg::ImageMemoryBarrier::create(
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, // srcAccessMask
+        VK_ACCESS_TRANSFER_READ_BIT,                                                                // dstAccessMask
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,                                           // oldLayout
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                                                       // newLayout
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // dstQueueFamilyIndex
+        sourceImage,                                                                                // image
+        VkImageSubresourceRange{imageAspectFlags, 0, 1, 0, 1}                                       // subresourceRange
+    );
+
+    auto transitionDestinationBufferToTransferWriteBarrier = vsg::BufferMemoryBarrier::create(
+        VK_ACCESS_MEMORY_READ_BIT,    // srcAccessMask
+        VK_ACCESS_TRANSFER_WRITE_BIT, // dstAccessMask
+        VK_QUEUE_FAMILY_IGNORED,      // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,      // dstQueueFamilyIndex
+        destinationBuffer,            // buffer
+        0,                            // offset
+        bufferSize                    // size
+    );
+
+    auto cmd_transitionSourceImageToTransferSourceLayoutBarrier = vsg::PipelineBarrier::create(
+        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // srcStageMask
+        VK_PIPELINE_STAGE_TRANSFER_BIT,                                                            // dstStageMask
+        0,                                                                                         // dependencyFlags
+        transitionSourceImageToTransferSourceLayoutBarrier,                                        // barrier
+        transitionDestinationBufferToTransferWriteBarrier                                          // barrier
+    );
+    commands->addChild(cmd_transitionSourceImageToTransferSourceLayoutBarrier);
+
+    // 2.b) copy image to buffer
+    {
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = width; // need to figure out actual row length from somewhere...
+        region.bufferImageHeight = height;
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageOffset = VkOffset3D{0, 0, 0};
+        region.imageExtent = VkExtent3D{width, height, 1};
+
+        auto copyImage = vsg::CopyImageToBuffer::create();
+        copyImage->srcImage = sourceImage;
+        copyImage->srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        copyImage->dstBuffer = destinationBuffer;
+        copyImage->regions.push_back(region);
+
+        commands->addChild(copyImage);
+    }
+
+    // 2.c) transition depth image back for rendering
+    auto transitionSourceImageBackToPresentBarrier = vsg::ImageMemoryBarrier::create(
+        VK_ACCESS_TRANSFER_READ_BIT,                                                                // srcAccessMask
+        VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, // dstAccessMask
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,                                                       // oldLayout
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,                                           // newLayout
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,                                                                    // dstQueueFamilyIndex
+        sourceImage,                                                                                // image
+        VkImageSubresourceRange{imageAspectFlags, 0, 1, 0, 1}                                       // subresourceRange
+    );
+
+    auto transitionDestinationBufferToMemoryReadBarrier = vsg::BufferMemoryBarrier::create(
+        VK_ACCESS_TRANSFER_WRITE_BIT, // srcAccessMask
+        VK_ACCESS_MEMORY_READ_BIT,    // dstAccessMask
+        VK_QUEUE_FAMILY_IGNORED,      // srcQueueFamilyIndex
+        VK_QUEUE_FAMILY_IGNORED,      // dstQueueFamilyIndex
+        destinationBuffer,            // buffer
+        0,                            // offset
+        bufferSize                    // size
+    );
+
+    auto cmd_transitionSourceImageBackToPresentBarrier = vsg::PipelineBarrier::create(
+        VK_PIPELINE_STAGE_TRANSFER_BIT,                                                            // srcStageMask
+        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // dstStageMask
+        0,                                                                                         // dependencyFlags
+        transitionSourceImageBackToPresentBarrier,                                                 // barrier
+        transitionDestinationBufferToMemoryReadBarrier                                             // barrier
+    );
+
+    commands->addChild(cmd_transitionSourceImageBackToPresentBarrier);
+
+    auto fence = vsg::Fence::create(device);
+    auto queueFamilyIndex = physicalDevice->getQueueFamily(VK_QUEUE_GRAPHICS_BIT);
+    auto commandPool = vsg::CommandPool::create(device, queueFamilyIndex);
+    auto queue = device->getQueue(queueFamilyIndex);
+
+    vsg::submitCommandsToQueue(commandPool, fence, 100000000000, queue, [&](vsg::CommandBuffer& commandBuffer) {
+        commands->record(commandBuffer);
+    });
+
+    // 3. map buffer and copy data.
+
+    // Map the buffer memory and assign as a vec4Array2D that will automatically unmap itself on destruction.
+    if (targetImageFormat == VK_FORMAT_D32_SFLOAT || targetImageFormat == VK_FORMAT_D32_SFLOAT_S8_UINT)
+    {
+        auto imageData = vsg::MappedData<vsg::floatArray2D>::create(destinationMemory, 0, 0, vsg::Data::Properties{targetImageFormat}, width, height); // deviceMemory, offset, flags and dimensions
+
+        size_t num_set_depth = 0;
+        size_t num_unset_depth = 0;
+        for (auto& value : *imageData)
+        {
+            if (value == 0.0f)
+                ++num_unset_depth;
+            else
+                ++num_set_depth;
+        }
+
+        std::cout << "num_unset_depth = " << num_unset_depth << std::endl;
+        std::cout << "num_set_depth = " << num_set_depth << std::endl;
+
+        if (vsg::write(imageData, filename, options))
+        {
+            std::cout<<"Written depth buffer to "<<filename<<std::endl;
+        }
+    }
+    else
+    {
+        auto imageData = vsg::MappedData<vsg::uintArray2D>::create(destinationMemory, 0, 0, vsg::Data::Properties{targetImageFormat}, width, height); // deviceMemory, offset, flags and dimensions
+
+        if (vsg::write(imageData, filename))
+        {
+            std::cout<<"Written depth buffer to "<<filename<<std::endl;
+        }
+    }
+}
+
+
+
 int main(int argc, char** argv)
 {
     // set up defaults and read command line arguments to override them
@@ -665,6 +892,7 @@ int main(int argc, char** argv)
 
     // offscreen capture filename and multi sampling parameters
     auto captureFilename = arguments.value<vsg::Path>("screenshot.vsgt", {"--capture-file", "-f"});
+    auto captureDepthFilename = arguments.value<vsg::Path>("depth.vsgt", {"--capture-depth-file", "-d"});
     bool msaa = arguments.read("--msaa");
 
     // tileset
@@ -789,34 +1017,16 @@ int main(int argc, char** argv)
     vsg_scene = transform;
 
 
-    auto [displayCamera, displayPerspective] = createCameraForScene(vsg_scene, ellipsoidModel, window->extent2D());
+    auto [displayCamera, displayPerspective, displayLookAt] = createCameraForScene(vsg_scene, ellipsoidModel, window->extent2D());
     auto displayRenderGraph = vsg::createRenderGraphForView(window, displayCamera, vsg_scene);
     displayRenderGraph->setClearValues(
         VkClearColorValue{{0.02899f, 0.02899f, 0.13321f, 0.0f}},
         VkClearDepthStencilValue{0.0f, 0});
 
-    // add close handler to respond to the close window button and pressing escape
-    viewer->addEventHandler(vsg::CloseHandler::create(viewer));
-    // viewer->addEventHandler(vsg::Trackball::create(displayCamera));
-
-    auto &_trackball = vsg::Trackball::create(displayCamera);
-    {
-        // osgEarthStyleMouseButtons
-        _trackball->panButtonMask = vsg::BUTTON_MASK_1;
-        _trackball->rotateButtonMask = vsg::BUTTON_MASK_2;
-        _trackball->zoomButtonMask = vsg::BUTTON_MASK_3;
-    }
-    viewer->addEventHandler(_trackball);
-
-
-    auto &ionIconComponent = CsApp::CreditComponent::create();
-    auto &renderImGui = vsgImGui::RenderImGui::create(window, ionIconComponent);
-
-    displayRenderGraph->addChild(renderImGui);
-
-    viewer->addEventHandler(vsgImGui::SendEventsToImGui::create());
-
-
+    // add ui & imgui
+    auto ui = vsgCs::UI::create();
+    ui->createUI2(window, viewer, displayCamera, environment->options);
+    displayRenderGraph->addChild(ui->getImGui());
 
     // for offscreen
     auto device = window->getOrCreateDevice();
@@ -907,9 +1117,63 @@ int main(int argc, char** argv)
     offscreenEnabled = false;
     offscreenSwitch->setAllChildren(offscreenEnabled);
 
+    // offscreen-control
+    vsgCs::CesiumClient csclient;
+    csclient.setTrackball(ui->getTrackball());
+    csclient.setDisplayCamera(displayCamera);
+    csclient.setOffscreenCamera(offscreenCamera);
+    csclient.setDisplayRenderGraph(displayRenderGraph);
+    csclient.setOffscreenRenderGraph(offscreenRenderGraph);
+
+    auto &offscreenControl = vsgCs::OffscreenControl::create();
+
+    long epsgCode = 4979;
+    offscreenControl->setLookAt(epsgCode, displayLookAt->eye, displayLookAt->center, displayLookAt->up);
+
+    auto &displayViewport = displayCamera->getViewport();
+    offscreenControl->setViewport(displayViewport.x, displayViewport.y, displayViewport.width, displayViewport.height);
+
+    csclient.setOffscreenControl(offscreenControl);
+
+    bool applyOffscreenControl = true;
+    bool enableOffscreenControlDemo = true;
+
     // rendering main loop
     while (viewer->advanceToNextFrame())
     {
+        if (applyOffscreenControl
+            && tilesetNode->getTileset()
+            && tilesetNode->getTileset()->getRootTile())
+        {
+            if (enableOffscreenControlDemo) {
+                auto &offscreenControl = csclient.getOffscreenControl();
+
+                auto &lookAt = offscreenControl->getLookAt();
+                auto eye = lookAt->eye;
+                auto center = lookAt->center;
+                auto up = lookAt->up;
+                eye = eye + vsg::dvec3(0.0, 0.1, 0.0);
+                offscreenControl->setLookAt(epsgCode, eye, center, up);
+
+                auto &viewport = offscreenControl->getViewport();
+                auto x = viewport.x;
+                auto y = viewport.y;
+                auto width = viewport.width;
+                auto height = viewport.height;
+                vsg::warn("x:",x, ",y:",y, ",width:",width, ",height:", height);
+                width -= 1;
+                offscreenControl->setViewport(x,y, width, height);
+
+                // offscreenPerspective->aspectRatio = width / height;
+                // offscreenRenderGraph->resized();
+                // displayPerspective->aspectRatio = width / height;
+                // displayRenderGraph->resized();
+            }
+
+            csclient.applyLookAt();
+            csclient.applyViewport();
+        }
+
         viewer->handleEvents();
 
         if (screenshotHandler->do_sync_extent)
@@ -962,10 +1226,11 @@ int main(int argc, char** argv)
             offscreenEnabled = false;
             offscreenSwitch->setAllChildren(offscreenEnabled);
             saveImage(captureFilename, viewer, device, captureImage, options);
+            screenshot_depth(captureDepthFilename, window, options);
             vsg::warn("hander - image capture finished");
         }
 
-        auto &fbuffer = getOffscreenFramebuffer(device, samples, displayCamera->getRenderArea().extent, offscreenImageFormat);
+        // auto &fbuffer = getOffscreenFramebuffer(device, samples, displayCamera->getRenderArea().extent, offscreenImageFormat);
     }
 
     tilesetNode->shutdown();

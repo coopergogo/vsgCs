@@ -1,5 +1,6 @@
 set(SOURCES
     cesium_client_offscreen.cpp
+    UI.cpp
 )
 
 INCLUDE_DIRECTORIES(${Vulkan_INCLUDE_DIR})
