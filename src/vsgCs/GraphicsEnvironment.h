@@ -76,8 +76,13 @@ namespace vsgCs
          * 2.
          */
         vsg::ref_ptr<vsg::PipelineLayout> overlayPipelineLayout;
+
+    public:
+        float getPointSize() const;
+        void setPointSize(const float&);
     protected:
         vsg::ref_ptr<vsg::CompileTraversal> miniCompileTraversal;
+        float pointSize;
     };
 
     // Utility

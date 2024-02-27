@@ -194,6 +194,7 @@ int CesiumClient::renderCesium(const vsg::ref_ptr<vsgCs::CommandOptions> &comman
 #endif
 
         auto vsg_scene = vsg::Group::create();
+        environment->genv->setPointSize(1.0f);
 
         auto ambientLight = vsg::AmbientLight::create();
         ambientLight->name = "ambient";

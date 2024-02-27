@@ -49,7 +49,8 @@ GraphicsEnvironment::GraphicsEnvironment(const vsg::ref_ptr<vsg::Options> &vsgOp
     : shaderFactory(ShaderFactory::create(vsgOptions)), features(in_features),
       sharedObjects(create_or<vsg::SharedObjects>(vsgOptions->sharedObjects)),
       device(in_device),
-      defaultTexture(makeDefaultTexture())
+      defaultTexture(makeDefaultTexture()),
+      pointSize(1.0f)
 
 {
     std::set<std::string> shaderDefines;
@@ -115,6 +116,15 @@ vsg::CompileResult GraphicsEnvironment::miniCompile(vsg::ref_ptr<vsg::Object> ob
 
     result.result = VK_SUCCESS;
     return result;
+}
+
+
+float GraphicsEnvironment::getPointSize() const {
+    return pointSize;
+}
+
+void GraphicsEnvironment::setPointSize(const float& size) {
+    pointSize = size;
 }
 
 namespace vsgCs
