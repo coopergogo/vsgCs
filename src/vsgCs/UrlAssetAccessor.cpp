@@ -257,7 +257,7 @@ UrlAssetAccessor::get(const CesiumAsync::AsyncSystem& asyncSystem,
 
               // Debug: print http request
               std::time_t now = std::time(nullptr);
-              vsg::warn("request start: ",std::asctime(std::localtime(&now)), request->url());
+              vsg::debug("request start: ",std::asctime(std::localtime(&now)), request->url());
 
               CURLcode responseCode = curl_easy_perform(curl());
               curl_slist_free_all(list);
@@ -312,7 +312,7 @@ UrlAssetAccessor::request(const CesiumAsync::AsyncSystem& asyncSystem,
 
                 // Debug: print http request
                 std::time_t now = std::time(nullptr);
-                vsg::warn("request start: ",std::asctime(std::localtime(&now)), request->url());
+                vsg::debug("request start: ",std::asctime(std::localtime(&now)), request->url());
 
                 if (payloadCopy->size() > 1UL << 31)
                 {
