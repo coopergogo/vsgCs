@@ -1135,8 +1135,8 @@ int main(int argc, char** argv)
 
     csclient.setOffscreenControl(offscreenControl);
 
-    bool applyOffscreenControl = true;
-    bool enableOffscreenControlDemo = true;
+    bool applyOffscreenControl = false;
+    bool enableOffscreenControlDemo = false;
 
     // rendering main loop
     while (viewer->advanceToNextFrame())
