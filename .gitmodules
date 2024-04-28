@@ -6,7 +6,7 @@
 	url = https://github.com/coopergogo/cesium-native.git
 [submodule "third_party/vsgImGui"]
 	path = third_party/vsgImGui
-	url = https://github.com/vsg-dev/vsgImGui.git
+	url = https://github.com/coopergogo/vsgImGui.git
 [submodule "third_party/vsg"]
 	path = third_party/vsg
 	url = https://github.com/coopergogo/VulkanSceneGraph.git
