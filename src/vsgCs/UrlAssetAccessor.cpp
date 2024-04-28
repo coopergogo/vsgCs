@@ -250,6 +250,9 @@ UrlAssetAccessor::get(const CesiumAsync::AsyncSystem& asyncSystem,
           {
               VSGCS_ZONESCOPEDN("UrlAssetAccessor::get inner");
               CurlHandle curl(accessor);
+              // When supporting https, the verification of the certificate is ignored
+              // TODO needs to be verified.
+              curl_easy_setopt(curl(), CURLOPT_SSL_VERIFYPEER, 0L);
               curl_slist* list = setCommonOptions(curl(), request->url(), accessor->userAgent,
                                                   request->headers());
               std::unique_ptr<UrlAssetResponse> response = std::make_unique<UrlAssetResponse>();
