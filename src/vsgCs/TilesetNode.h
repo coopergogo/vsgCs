@@ -76,6 +76,10 @@ namespace vsgCs
         void updateViews(const vsg::ref_ptr<vsg::Viewer>& viewer);
         // void attachToViewer(vsg::ref_ptr<vsg::Viewer> viewer, vsg::ref_ptr<vsg::Group> attachment);
 
+        void updateSource(const DeviceFeatures& deviceFeatures, const TilesetSource& source,
+            const Cesium3DTilesSelection::TilesetOptions& tilesetOptions,
+            const vsg::ref_ptr<vsg::Options>& options);
+
         std::vector<Cesium3DTilesSelection::Tile*> getRenderTiles();
         std::vector<Cesium3DTilesSelection::Tile*> getRenderTilesContent();
         RenderContent* getRenderContent();

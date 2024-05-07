@@ -129,6 +129,60 @@ TilesetNode::TilesetNode(const DeviceFeatures& deviceFeatures, const TilesetSour
     }
 }
 
+void TilesetNode::updateSource(
+    const DeviceFeatures& deviceFeatures,
+    const TilesetSource& source,
+    const Cesium3DTilesSelection::TilesetOptions& tilesetOptions,
+    const vsg::ref_ptr<vsg::Options>&
+) {
+    Cesium3DTilesSelection::TilesetOptions options(tilesetOptions);
+    // turn off all the unsupported stuff
+    options.enableOcclusionCulling = false;
+    // Generous per-frame time limits for loading / unloading on main thread.
+    options.mainThreadLoadingTimeLimit = 5.0;
+    options.tileCacheUnloadTimeLimit = 5.0;
+    options.contentOptions.enableWaterMask = false;
+    options.loadErrorCallback =
+        [](const Cesium3DTilesSelection::TilesetLoadFailureDetails& details)
+    {
+        if (details.statusCode != 200)
+        {
+            vsg::warn("status code = ", details.statusCode);
+        }
+        if (!details.message.empty())
+        {
+            vsg::warn(details.message);
+        }
+    };
+    auto externals = RuntimeEnvironment::get()->getTilesetExternals();
+    options.contentOptions.ktx2TranscodeTargets = deviceFeatures.ktx2TranscodeTargets;
+
+    if (source.url)
+    {
+        _tileset = std::make_unique<Cesium3DTilesSelection::Tileset>(*externals, source.url.value(), options);
+    }
+    else
+    {
+        if (source.ionAssetEndpointUrl)
+        {
+            _tileset
+                = std::make_unique<Cesium3DTilesSelection::Tileset>(*externals,
+                                                                    source.ionAssetID.value(),
+                                                                    source.ionAccessToken.value(),
+                                                                    options,
+                                                                    source.ionAssetEndpointUrl.value());
+        }
+        else
+        {
+            _tileset
+                = std::make_unique<Cesium3DTilesSelection::Tileset>(*externals,
+                                                                    source.ionAssetID.value(),
+                                                                    source.ionAccessToken.value(),
+                                                                    options);
+        }
+    }
+}
+
 // From Cesium Unreal:
 // Don't allow this Cesium3DTileset to be fully destroyed until
 // any cesium-native Tilesets it created have wrapped up any async
